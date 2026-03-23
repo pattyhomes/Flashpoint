@@ -3,14 +3,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import create_tables
+from app.database import init_db
 from app.jobs.scheduler import start_scheduler, stop_scheduler
 from app.routes import events, health, hotspots, priorities
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_tables()
+    init_db()
     start_scheduler()
     yield
     stop_scheduler()

@@ -25,7 +25,7 @@ def get_db():
         db.close()
 
 
-def create_tables():
+def init_db():
     """Create all tables on app startup. Safe to call repeatedly."""
     from app import models  # noqa: F401 — registers models with Base
     Base.metadata.create_all(bind=engine)

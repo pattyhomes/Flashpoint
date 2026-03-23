@@ -3,12 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Event
-from app.schemas import EventRead
+from app.schemas import EventOut
 
 router = APIRouter(prefix="/events", tags=["events"])
 
 
-@router.get("/", response_model=list[EventRead])
+@router.get("/", response_model=list[EventOut])
 def list_events(
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
@@ -23,7 +23,7 @@ def list_events(
     )
 
 
-@router.get("/{event_id}", response_model=EventRead)
+@router.get("/{event_id}", response_model=EventOut)
 def get_event(event_id: int, db: Session = Depends(get_db)):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:

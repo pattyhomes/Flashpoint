@@ -314,10 +314,10 @@
 }
 
 .detail-body {
-  padding: var(--sp-md);
+  padding: var(--sp-lg);
   display: flex;
   flex-direction: column;
-  gap: var(--sp-lg);
+  gap: var(--sp-xl);
 }
 
 .detail-title {
@@ -374,7 +374,7 @@
 .detail-section {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-sm);
+  gap: var(--sp-md);
 }
 
 .detail-section__heading {
@@ -389,7 +389,7 @@
 .score-bar-row {
   display: flex;
   align-items: center;
-  gap: var(--sp-sm);
+  gap: var(--sp-md);
 }
 
 .score-bar-row__label {
@@ -397,13 +397,13 @@
   font-size: var(--text-xs);
   letter-spacing: 0.06em;
   color: var(--text-muted);
-  width: 48px;
+  width: 56px;
   flex-shrink: 0;
 }
 
 .score-bar {
   flex: 1;
-  height: 4px;
+  height: 5px;
   border-radius: 2px;
   background: var(--surface-3);
   overflow: hidden;

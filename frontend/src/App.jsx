@@ -19,6 +19,9 @@ export default function App() {
   const [selectedItem, setSelectedItem] = useState(null)
   const [activeTypes, setActiveTypes]   = useState(new Set())
   const [layersVisible, setLayersVisible] = useState({ events: true, hotspots: true, heatmap: false })
+  const [minSeverity,   setMinSeverity]   = useState(0)
+  const [minConfidence, setMinConfidence] = useState(0)
+  const [activeTrends,  setActiveTrends]  = useState(new Set())
 
   // Fetch all data once on mount
   useEffect(() => {
@@ -61,20 +64,33 @@ export default function App() {
     })
   }
 
-  const filteredEvents = useMemo(
-    () => activeTypes.size === 0 ? events : events.filter(e => activeTypes.has(e.event_type)),
-    [events, activeTypes]
-  )
+  // Filter trend state
+  function handleToggleTrend(key) {
+    setActiveTrends(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  const filteredEvents = useMemo(() => events.filter(e => {
+    if (activeTypes.size > 0  && !activeTypes.has(e.event_type))    return false
+    if (e.severity_score   < minSeverity)                            return false
+    if (e.confidence_score < minConfidence)                          return false
+    if (activeTrends.size  > 0 && !activeTrends.has(e.trend_state)) return false
+    return true
+  }), [events, activeTypes, minSeverity, minConfidence, activeTrends])
 
   return (
     <Shell
       left={
         <FilterRail
-          activeTypes={activeTypes}
-          onToggle={handleToggleType}
+          activeTypes={activeTypes}     onToggle={handleToggleType}
           onClear={() => setActiveTypes(new Set())}
-          layersVisible={layersVisible}
-          onToggleLayer={handleToggleLayer}
+          layersVisible={layersVisible} onToggleLayer={handleToggleLayer}
+          minSeverity={minSeverity}     onSetSeverity={setMinSeverity}
+          minConfidence={minConfidence} onSetConfidence={setMinConfidence}
+          activeTrends={activeTrends}   onToggleTrend={handleToggleTrend}
         />
       }
       map={

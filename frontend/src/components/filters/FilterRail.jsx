@@ -5,7 +5,12 @@ const EVENT_TYPES = [
   { key: 'protest',    label: 'Protest',    color: '#22c55e' },
 ]
 
-export default function FilterRail({ activeTypes, onToggle, onClear }) {
+const LAYERS = [
+  { key: 'events',   label: 'Events',   color: '#4a9eff' },
+  { key: 'hotspots', label: 'Hotspots', color: '#9aa0b0' },
+]
+
+export default function FilterRail({ activeTypes, onToggle, onClear, layersVisible, onToggleLayer }) {
   const allActive = activeTypes.size === 0
 
   return (
@@ -34,7 +39,18 @@ export default function FilterRail({ activeTypes, onToggle, onClear }) {
 
       <div>
         <p className="filter-section__heading">Layers</p>
-        <p className="filter-section__placeholder">Map layers coming soon</p>
+        <div className="filter-section__chips">
+          {LAYERS.map(l => (
+            <button
+              key={l.key}
+              className={`filter-chip${layersVisible[l.key] ? ' filter-chip--active' : ''}`}
+              onClick={() => onToggleLayer(l.key)}
+            >
+              <span className="filter-chip__dot" style={{ backgroundColor: l.color }} />
+              {l.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )

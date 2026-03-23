@@ -18,6 +18,7 @@ export default function App() {
 
   const [selectedItem, setSelectedItem] = useState(null)
   const [activeTypes, setActiveTypes]   = useState(new Set())
+  const [layersVisible, setLayersVisible] = useState({ events: true, hotspots: true })
 
   // Fetch all data once on mount
   useEffect(() => {
@@ -46,6 +47,11 @@ export default function App() {
     )
   }
 
+  // Toggle map layer visibility
+  function handleToggleLayer(key) {
+    setLayersVisible(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   // Filter event types
   function handleToggleType(key) {
     setActiveTypes(prev => {
@@ -67,6 +73,8 @@ export default function App() {
           activeTypes={activeTypes}
           onToggle={handleToggleType}
           onClear={() => setActiveTypes(new Set())}
+          layersVisible={layersVisible}
+          onToggleLayer={handleToggleLayer}
         />
       }
       map={
@@ -75,6 +83,7 @@ export default function App() {
           hotspots={hotspots}
           selectedItem={selectedItem}
           onSelect={handleSelect}
+          layersVisible={layersVisible}
         />
       }
       right={

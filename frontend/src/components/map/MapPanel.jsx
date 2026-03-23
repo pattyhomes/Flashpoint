@@ -50,7 +50,7 @@ function toHotspotsGeoJSON(hotspots) {
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] }
 
-export default function MapPanel({ events = [], hotspots = [], selectedItem, onSelect }) {
+export default function MapPanel({ events = [], hotspots = [], selectedItem, onSelect, layersVisible = { events: true, hotspots: true } }) {
   const containerRef = useRef(null)
   const mapRef       = useRef(null)
   const loadedRef    = useRef(false)
@@ -188,6 +188,16 @@ export default function MapPanel({ events = [], hotspots = [], selectedItem, onS
     if (!loadedRef.current || !mapRef.current) return
     mapRef.current.getSource('hotspots')?.setData(toHotspotsGeoJSON(hotspots))
   }, [hotspots])
+
+  // ── Sync layer visibility ─────────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !loadedRef.current) return
+    const vis = (on) => on ? 'visible' : 'none'
+    map.setLayoutProperty('events-layer',   'visibility', vis(layersVisible.events))
+    map.setLayoutProperty('hotspots-layer', 'visibility', vis(layersVisible.hotspots))
+    map.setLayoutProperty('hotspots-glow',  'visibility', vis(layersVisible.hotspots))
+  }, [layersVisible])
 
   // ── Sync selection: highlight ring + fly-to ──────────────────────────────
   useEffect(() => {

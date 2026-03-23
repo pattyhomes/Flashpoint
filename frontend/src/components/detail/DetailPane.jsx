@@ -31,6 +31,15 @@ function formatDate(iso) {
   })
 }
 
+function relativeTime(iso) {
+  if (!iso) return '—'
+  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
+  if (sec < 60) return `${sec}s`
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m`
+  return `${Math.floor(min / 60)}h`
+}
+
 function badgeStyle(type) {
   const colors = {
     violence:   { color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
@@ -40,6 +49,36 @@ function badgeStyle(type) {
   }
   const c = colors[type] || { color: '#9aa0b0', border: 'rgba(154,160,176,0.4)' }
   return { color: c.color, borderColor: c.border }
+}
+
+function proximityEvents(hotspot, events) {
+  return events
+    .filter(e => {
+      const d = Math.sqrt(
+        Math.pow(e.latitude  - hotspot.centroid_lat, 2) +
+        Math.pow(e.longitude - hotspot.centroid_lon, 2)
+      )
+      return d < 2.5
+    })
+    .sort((a, b) => b.severity_score - a.severity_score)
+    .slice(0, 8)
+}
+
+function hotspotSummary(h, nearbyEvents) {
+  const trend = h.trend_state === 'escalating' ? 'Escalating'
+              : h.trend_state === 'declining'  ? 'Declining'
+              : 'Ongoing'
+  const sev   = h.severity_score >= 0.8 ? 'high-severity'
+              : h.severity_score >= 0.5 ? 'moderate-severity'
+              : 'low-severity'
+  let text = `${trend} ${sev} cluster with ${h.event_count} event${h.event_count !== 1 ? 's' : ''}. Priority score ${Math.round(h.priority_score * 100)}.`
+  if (nearbyEvents.length > 0) {
+    const counts = {}
+    nearbyEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1 })
+    const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+    text += ` Predominant activity type: ${dominant}.`
+  }
+  return text
 }
 
 function EventDetail({ event }) {
@@ -103,17 +142,8 @@ function EventDetail({ event }) {
   )
 }
 
-function hotspotSummary(h) {
-  const trend = h.trend_state === 'escalating' ? 'Escalating'
-              : h.trend_state === 'declining'  ? 'Declining'
-              : 'Ongoing'
-  const sev   = h.severity_score >= 0.8 ? 'high-severity'
-              : h.severity_score >= 0.5 ? 'moderate-severity'
-              : 'low-severity'
-  return `${trend} ${sev} cluster with ${h.event_count} event${h.event_count !== 1 ? 's' : ''}. Priority score ${Math.round(h.priority_score * 100)}.`
-}
-
-function HotspotDetail({ hotspot }) {
+function HotspotDetail({ hotspot, events }) {
+  const nearby = proximityEvents(hotspot, events)
   return (
     <div className="detail-body">
       <div className="detail-title">{hotspot.name || 'Unnamed Hotspot'}</div>
@@ -162,14 +192,29 @@ function HotspotDetail({ hotspot }) {
       <div className="detail-section">
         <span className="detail-section__heading">Assessment</span>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-          {hotspotSummary(hotspot)}
+          {hotspotSummary(hotspot, nearby)}
         </p>
+      </div>
+
+      <div className="detail-section">
+        <span className="detail-section__heading">Nearby Events</span>
+        {nearby.length === 0
+          ? <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No events in range</span>
+          : nearby.map(e => (
+              <div key={e.id} className="hotspot-event-row">
+                <span className="hotspot-event-row__dot" style={{ backgroundColor: severityColor(e.severity_score) }} />
+                <span className="hotspot-event-row__type">{e.event_type}</span>
+                <span className="hotspot-event-row__title">{e.title}</span>
+                <span className="hotspot-event-row__time">{relativeTime(e.occurred_at)}</span>
+              </div>
+            ))
+        }
       </div>
     </div>
   )
 }
 
-export default function DetailPane({ item, onClose }) {
+export default function DetailPane({ item, onClose, events = [] }) {
   const paneRef = useRef(null)
 
   // Reset scroll to top whenever the selected item changes
@@ -195,7 +240,7 @@ export default function DetailPane({ item, onClose }) {
       </div>
       {item.type === 'event'
         ? <EventDetail event={item.data} />
-        : <HotspotDetail hotspot={item.data} />
+        : <HotspotDetail hotspot={item.data} events={events} />
       }
     </div>
   )

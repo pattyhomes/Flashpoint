@@ -132,6 +132,7 @@ export default function App() {
           <DetailPane
             item={selectedItem}
             onClose={() => setSelectedItem(null)}
+            events={filteredEvents}
           />
         </>
       }

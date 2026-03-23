@@ -77,6 +77,10 @@ class HotspotOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class HotspotDetailOut(HotspotOut):
+    member_events: list[EventOut] = []
+
+
 class HealthResponse(BaseModel):
     status: str
     service: str

@@ -1,9 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import Hotspot
+from app.schemas import HotspotOut
 
 router = APIRouter(prefix="/priorities", tags=["priorities"])
 
 
-@router.get("/")
-def list_priorities():
-    # TODO: implement priority ranking
-    return []
+@router.get("/", response_model=list[HotspotOut])
+def list_priorities(db: Session = Depends(get_db)):
+    return db.query(Hotspot).order_by(Hotspot.priority_score.desc()).limit(3).all()

@@ -80,4 +80,5 @@ class HotspotOut(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     service: str
+    db_status: str
     timestamp: str

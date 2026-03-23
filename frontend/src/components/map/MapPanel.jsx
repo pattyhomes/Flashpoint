@@ -50,7 +50,7 @@ function toHotspotsGeoJSON(hotspots) {
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] }
 
-export default function MapPanel({ events = [], hotspots = [], selectedItem, onSelect, layersVisible = { events: true, hotspots: true } }) {
+export default function MapPanel({ events = [], hotspots = [], selectedItem, onSelect, layersVisible = { events: true, hotspots: true, heatmap: false } }) {
   const containerRef = useRef(null)
   const mapRef       = useRef(null)
   const loadedRef    = useRef(false)
@@ -87,6 +87,40 @@ export default function MapPanel({ events = [], hotspots = [], selectedItem, onS
 
       // ── Events ─────────────────────────────────────────────────────────
       map.addSource('events', { type: 'geojson', data: toEventsGeoJSON(eventsRef.current) })
+
+      // ── Heatmap (below event circles) ───────────────────────────────────
+      map.addLayer({
+        id: 'heatmap-layer',
+        type: 'heatmap',
+        source: 'events',
+        layout: { visibility: 'none' },
+        paint: {
+          'heatmap-weight': ['interpolate', ['linear'], ['get', 'severity_score'],
+            0, 0.5,
+            1, 1.5,
+          ],
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'],
+            3, 20,
+            8, 35,
+          ],
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'],
+            3, 1,
+            8, 2,
+          ],
+          'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'],
+            0,    'rgba(0,0,0,0)',
+            0.25, 'rgba(234,179,8,0.0)',
+            0.45, 'rgba(245,158,11,0.35)',
+            0.65, 'rgba(239,68,68,0.50)',
+            0.85, 'rgba(239,68,68,0.65)',
+            1,    'rgba(239,68,68,0.75)',
+          ],
+          'heatmap-opacity': ['interpolate', ['linear'], ['zoom'],
+            5, 0.80,
+            9, 0.0,
+          ],
+        },
+      })
       map.addLayer({
         id: 'events-layer',
         type: 'circle',
@@ -194,6 +228,7 @@ export default function MapPanel({ events = [], hotspots = [], selectedItem, onS
     const map = mapRef.current
     if (!map || !loadedRef.current) return
     const vis = (on) => on ? 'visible' : 'none'
+    map.setLayoutProperty('heatmap-layer',  'visibility', vis(layersVisible.heatmap))
     map.setLayoutProperty('events-layer',   'visibility', vis(layersVisible.events))
     map.setLayoutProperty('hotspots-layer', 'visibility', vis(layersVisible.hotspots))
     map.setLayoutProperty('hotspots-glow',  'visibility', vis(layersVisible.hotspots))

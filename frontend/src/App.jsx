@@ -18,7 +18,7 @@ export default function App() {
 
   const [selectedItem, setSelectedItem] = useState(null)
   const [activeTypes, setActiveTypes]   = useState(new Set())
-  const [layersVisible, setLayersVisible] = useState({ events: true, hotspots: true })
+  const [layersVisible, setLayersVisible] = useState({ events: true, hotspots: true, heatmap: false })
 
   // Fetch all data once on mount
   useEffect(() => {

@@ -8,6 +8,7 @@ const EVENT_TYPES = [
 const LAYERS = [
   { key: 'events',   label: 'Events',   color: '#4a9eff' },
   { key: 'hotspots', label: 'Hotspots', color: '#9aa0b0' },
+  { key: 'heatmap',  label: 'Heatmap',  color: '#f59e0b' },
 ]
 
 export default function FilterRail({ activeTypes, onToggle, onClear, layersVisible, onToggleLayer }) {

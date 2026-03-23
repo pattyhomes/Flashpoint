@@ -1,0 +1,52 @@
+/* ── Shell Grid ── */
+.shell {
+  display: grid;
+  grid-template-columns: var(--left-w) 1fr var(--right-w);
+  grid-template-rows: 1fr var(--bottom-h) var(--status-h);
+  grid-template-areas:
+    "left   map    right"
+    "left   bottom right"
+    "status status status";
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.shell__left {
+  grid-area: left;
+  background: var(--surface-1);
+  border-right: 1px solid var(--surface-border);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.shell__map {
+  grid-area: map;
+  background: var(--surface-0);
+  position: relative;
+  overflow: hidden;
+}
+
+.shell__right {
+  grid-area: right;
+  background: var(--surface-1);
+  border-left: 1px solid var(--surface-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.shell__bottom {
+  grid-area: bottom;
+  background: var(--surface-1);
+  border-top: 1px solid var(--surface-border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell__status {
+  grid-area: status;
+  background: var(--surface-2);
+  border-top: 1px solid var(--surface-border);
+}

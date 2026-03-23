@@ -1,0 +1,94 @@
+/* ── Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Design Tokens ── */
+:root {
+  /* Surfaces */
+  --surface-0: #0a0c10;
+  --surface-1: #111318;
+  --surface-2: #181b22;
+  --surface-3: #1f2330;
+  --surface-border: #2a2e3b;
+
+  /* Text */
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0b0;
+  --text-muted: #5c6275;
+
+  /* Accent */
+  --accent: #4a9eff;
+  --accent-dim: rgba(74, 158, 255, 0.15);
+
+  /* Severity */
+  --sev-critical: #ef4444;
+  --sev-high: #f59e0b;
+  --sev-medium: #eab308;
+  --sev-low: #22c55e;
+
+  /* Trend */
+  --trend-escalating: #ef4444;
+  --trend-stable: #9aa0b0;
+  --trend-declining: #22c55e;
+
+  /* Typography */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  --font-mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
+
+  --text-xs:   0.6875rem; /* 11px */
+  --text-sm:   0.75rem;   /* 12px */
+  --text-base: 0.8125rem; /* 13px */
+  --text-lg:   0.9375rem; /* 15px */
+  --text-xl:   1.125rem;  /* 18px */
+
+  /* Spacing */
+  --sp-xs: 4px;
+  --sp-sm: 8px;
+  --sp-md: 12px;
+  --sp-lg: 16px;
+  --sp-xl: 24px;
+
+  /* Touch */
+  --touch-min: 44px;
+
+  /* Panels */
+  --left-w:    240px;
+  --right-w:   320px;
+  --bottom-h:  220px;
+  --status-h:  32px;
+  --radius:    4px;
+}
+
+/* ── Base ── */
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  background-color: var(--surface-0);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* Faint grid texture */
+  background-image:
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 2px; }

@@ -81,6 +81,26 @@ export default function App() {
     return true
   }), [events, activeTypes, minSeverity, minConfidence, activeTrends])
 
+  const filteredHotspots = useMemo(
+    () => activeTrends.size === 0 ? hotspots : hotspots.filter(h => activeTrends.has(h.trend_state)),
+    [hotspots, activeTrends]
+  )
+
+  const filteredPriorities = useMemo(
+    () => activeTrends.size === 0 ? priorities : priorities.filter(p => activeTrends.has(p.trend_state)),
+    [priorities, activeTrends]
+  )
+
+  // Clear selection when the selected item is filtered out
+  useEffect(() => {
+    if (!selectedItem) return
+    if (selectedItem.type === 'event') {
+      if (!filteredEvents.find(e => e.id === selectedItem.data.id)) setSelectedItem(null)
+    } else {
+      if (!filteredHotspots.find(h => h.id === selectedItem.data.id)) setSelectedItem(null)
+    }
+  }, [filteredEvents, filteredHotspots, selectedItem])
+
   return (
     <Shell
       left={
@@ -96,7 +116,7 @@ export default function App() {
       map={
         <MapPanel
           events={filteredEvents}
-          hotspots={hotspots}
+          hotspots={filteredHotspots}
           selectedItem={selectedItem}
           onSelect={handleSelect}
           layersVisible={layersVisible}
@@ -105,7 +125,7 @@ export default function App() {
       right={
         <>
           <PriorityList
-            priorities={priorities}
+            priorities={filteredPriorities}
             selectedItem={selectedItem}
             onSelect={handleSelect}
           />

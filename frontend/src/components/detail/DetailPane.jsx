@@ -1,3 +1,5 @@
+import { useRef, useEffect } from 'react'
+
 function severityColor(score) {
   if (score >= 0.8) return '#ef4444'
   if (score >= 0.6) return '#f59e0b'
@@ -101,6 +103,16 @@ function EventDetail({ event }) {
   )
 }
 
+function hotspotSummary(h) {
+  const trend = h.trend_state === 'escalating' ? 'Escalating'
+              : h.trend_state === 'declining'  ? 'Declining'
+              : 'Ongoing'
+  const sev   = h.severity_score >= 0.8 ? 'high-severity'
+              : h.severity_score >= 0.5 ? 'moderate-severity'
+              : 'low-severity'
+  return `${trend} ${sev} cluster with ${h.event_count} event${h.event_count !== 1 ? 's' : ''}. Priority score ${Math.round(h.priority_score * 100)}.`
+}
+
 function HotspotDetail({ hotspot }) {
   return (
     <div className="detail-body">
@@ -146,11 +158,25 @@ function HotspotDetail({ hotspot }) {
           <span className="detail-row__value">{hotspot.centroid_lon.toFixed(4)}</span>
         </div>
       </div>
+
+      <div className="detail-section">
+        <span className="detail-section__heading">Assessment</span>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          {hotspotSummary(hotspot)}
+        </p>
+      </div>
     </div>
   )
 }
 
 export default function DetailPane({ item, onClose }) {
+  const paneRef = useRef(null)
+
+  // Reset scroll to top whenever the selected item changes
+  useEffect(() => {
+    if (paneRef.current) paneRef.current.scrollTop = 0
+  }, [item])
+
   if (!item) {
     return (
       <div className="detail-pane detail-pane--empty">
@@ -162,7 +188,7 @@ export default function DetailPane({ item, onClose }) {
   }
 
   return (
-    <div className="detail-pane">
+    <div className="detail-pane" ref={paneRef}>
       <div className="detail-pane__header">
         <span className="detail-pane__type">{item.type}</span>
         <button className="detail-pane__close" onClick={onClose} aria-label="Close">✕</button>

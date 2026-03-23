@@ -1,3 +1,5 @@
+import { useRef, useEffect } from 'react'
+
 function severityColor(score) {
   if (score >= 0.8) return '#ef4444'
   if (score >= 0.6) return '#f59e0b'
@@ -18,6 +20,7 @@ function EventRow({ event, isSelected, onSelect }) {
   const location = [event.city, event.state].filter(Boolean).join(', ')
   return (
     <button
+      data-id={event.id}
       className={`event-row${isSelected ? ' event-row--selected' : ''}`}
       onClick={onSelect}
     >
@@ -34,13 +37,22 @@ function EventRow({ event, isSelected, onSelect }) {
 }
 
 export default function EventFeed({ events, selectedItem, onSelect }) {
+  const listRef = useRef(null)
+
+  // Scroll selected row into view when selection changes externally (map/priorities)
+  useEffect(() => {
+    if (!selectedItem || selectedItem.type !== 'event' || !listRef.current) return
+    const el = listRef.current.querySelector(`[data-id="${selectedItem.data.id}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [selectedItem])
+
   return (
     <div className="event-feed">
       <div className="panel-header">
         <span className="panel-header__title">Event Feed</span>
         <span className="panel-header__count">{events.length}</span>
       </div>
-      <div className="event-feed__list">
+      <div className="event-feed__list" ref={listRef}>
         {events.map(event => (
           <EventRow
             key={event.id}

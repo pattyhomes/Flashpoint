@@ -32,6 +32,13 @@ export default function App() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Escape key to dismiss selection
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') setSelectedItem(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Toggle-to-deselect
   function handleSelect(item) {
     setSelectedItem(prev =>

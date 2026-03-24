@@ -3,39 +3,188 @@ Hotspot clustering and scoring.
 
 Algorithm:
   1. Clear any stale cluster_id / trend_state on all active events.
-  2. Load all active events and all hotspot centroids from DB.
-  3. Assign each event to the nearest hotspot centroid within MAX_RADIUS degrees.
-  4. Compute severity, confidence, momentum, priority, and trend_state from members.
-  5. Write cluster_id and trend_state back to each assigned Event.
-  6. Write all computed scores back to each Hotspot.
+  2. Load all active events.
+  3. Two-pass greedy radius clustering to derive centroid candidates from event density.
+  4. Delete all existing Hotspot rows; insert new ones from candidates; flush to get IDs.
+  5. Compute severity, confidence, momentum, priority, and trend_state from each cluster's members.
+  6. Write cluster_id and trend_state back to each assigned Event.
+  7. Write all computed scores back to each Hotspot.
 """
 from datetime import datetime
+from collections import defaultdict
 import math
 
 from sqlalchemy.orm import Session
 
 from app.models import Event, Hotspot
 
-MAX_RADIUS = 3.0  # degrees lat/lon; ~220 mi at US latitudes
+CLUSTER_RADIUS_MILES = 150   # metro-region radius — events within this distance merge
+MIN_EVENTS           = 3     # minimum members to form a hotspot
+MAX_HOTSPOTS         = 15    # cap to avoid UI clutter
+
+_COUNTRY_LEVEL_LABELS = frozenset({"United States", "United States of America"})
+
+_US_STATE_NAMES = frozenset({
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+    "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+    "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana",
+    "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
+    "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada",
+    "New Hampshire", "New Jersey", "New Mexico", "New York",
+    "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+    "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
+    "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington",
+    "West Virginia", "Wisconsin", "Wyoming",
+})
+
+_STATE_ABBREV_TO_NAME = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
+    "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho",
+    "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas",
+    "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi",
+    "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
+    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York",
+    "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma",
+    "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah",
+    "VT": "Vermont", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia",
+    "WI": "Wisconsin", "WY": "Wyoming", "DC": "Washington, D.C.",
+}
 
 
-def _dist(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    return math.sqrt((lat1 - lat2) ** 2 + (lon1 - lon2) ** 2)
+def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 3958.8
+    lat1, lat2 = math.radians(lat1), math.radians(lat2)
+    dlat = lat2 - lat1
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2
+         + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2)
+    return 2 * R * math.asin(math.sqrt(a))
 
 
-def _assign_events(
-    events: list[Event], hotspots: list[Hotspot]
-) -> dict[int, list[Event]]:
-    clusters: dict[int, list[Event]] = {h.id: [] for h in hotspots}
-    for event in events:
-        nearest_id, nearest_dist = None, float("inf")
-        for h in hotspots:
-            d = _dist(event.latitude, event.longitude, h.centroid_lat, h.centroid_lon)
-            if d < nearest_dist:
-                nearest_dist, nearest_id = d, h.id
-        if nearest_dist <= MAX_RADIUS and nearest_id is not None:
-            clusters[nearest_id].append(event)
-    return clusters
+def _is_country_level(event: Event) -> bool:
+    return event.city is not None and event.city in _COUNTRY_LEVEL_LABELS
+
+
+def _is_state_level(event: Event) -> bool:
+    if event.city is None:
+        return False
+    if event.city in _US_STATE_NAMES:
+        return True
+    if event.city == event.state:
+        return True
+    return False
+
+
+def _cluster_events(events: list[Event]) -> list[dict]:
+    """
+    Two-pass greedy radius clustering.
+
+    Pass 1: Sort events by occurred_at DESC. Precise city/county events may anchor
+    new clusters; state-level events only join existing clusters in pass 1.
+
+    Pass 2: State-level events that remain unassigned are grouped by state.
+    If a state group has >= MIN_EVENTS members it becomes a fallback cluster.
+
+    Returns a list of candidate dicts: {lat, lon, members}.
+    """
+    sorted_events = sorted(events, key=lambda e: e.occurred_at or datetime.min, reverse=True)
+
+    candidates: list[dict] = []   # {lat, lon, n, members}
+    unassigned_state: list[Event] = []
+
+    for event in sorted_events:
+        state_level   = _is_state_level(event)
+        country_level = _is_country_level(event)
+
+        # Find nearest existing candidate
+        nearest_idx, nearest_d = -1, float("inf")
+        for i, c in enumerate(candidates):
+            d = _haversine_miles(event.latitude, event.longitude, c["lat"], c["lon"])
+            if d < nearest_d:
+                nearest_d, nearest_idx = d, i
+
+        if nearest_d <= CLUSTER_RADIUS_MILES:
+            # Merge into nearest candidate via running mean (all events may join)
+            c = candidates[nearest_idx]
+            n = c["n"]
+            c["lat"] = (c["lat"] * n + event.latitude)  / (n + 1)
+            c["lon"] = (c["lon"] * n + event.longitude) / (n + 1)
+            c["n"]  += 1
+            c["members"].append(event)
+        elif not state_level and not country_level:
+            # Precise city/county event starts a new cluster
+            candidates.append({
+                "lat": event.latitude,
+                "lon": event.longitude,
+                "n": 1,
+                "members": [event],
+            })
+        elif state_level:
+            # State-level event with no nearby cluster — defer to pass 2 fallback
+            unassigned_state.append(event)
+        # Country-level events that can't join are dropped (remain unassigned —
+        # too imprecise to anchor or fall back to a named hotspot)
+
+    # Pass 2: state-region fallback clusters
+    by_state: dict[str, list[Event]] = defaultdict(list)
+    for event in unassigned_state:
+        key = event.state or "unknown"
+        by_state[key].append(event)
+
+    for state_key, members in by_state.items():
+        if len(members) < MIN_EVENTS:
+            continue
+        lat = sum(e.latitude  for e in members) / len(members)
+        lon = sum(e.longitude for e in members) / len(members)
+        candidates.append({"lat": lat, "lon": lon, "n": len(members), "members": members})
+
+    # Prune under-threshold candidates
+    candidates = [c for c in candidates if len(c["members"]) >= MIN_EVENTS]
+
+    # Sort by member count descending, cap
+    candidates.sort(key=lambda c: len(c["members"]), reverse=True)
+    return candidates[:MAX_HOTSPOTS]
+
+
+def _hotspot_name(members: list[Event]) -> str:
+    # 1. City: most common city that is NOT a state/country-level label and NOT a county/parish
+    cities = [e.city for e in members
+              if e.city
+              and e.city not in _US_STATE_NAMES
+              and e.city not in _COUNTRY_LEVEL_LABELS
+              and "county" not in e.city.lower()
+              and "parish" not in e.city.lower()
+              and e.city != e.state]
+    if cities:
+        best = max(set(cities), key=cities.count)
+        states = [e.state for e in members if e.city == best and e.state]
+        st = max(set(states), key=states.count) if states else None
+        return f"{best}, {st}" if st else best
+
+    # 2. County/Parish
+    counties = [e.city for e in members
+                if e.city and ("county" in e.city.lower()
+                               or "parish" in e.city.lower())]
+    if counties:
+        best = max(set(counties), key=counties.count)
+        states = [e.state for e in members if e.city == best and e.state]
+        st = max(set(states), key=states.count) if states else None
+        return f"{best}, {st}" if st else best
+
+    # 3. State region (full state name to avoid abbreviation ambiguity)
+    states = [e.state for e in members if e.state]
+    if states:
+        best_abbrev = max(set(states), key=states.count)
+        full_name = _STATE_ABBREV_TO_NAME.get(best_abbrev, best_abbrev)
+        return f"{full_name} region"
+
+    # 4. Coordinate fallback
+    lat = sum(e.latitude  for e in members) / len(members)
+    lon = sum(e.longitude for e in members) / len(members)
+    return f"Cluster ({lat:.1f}°N, {abs(lon):.1f}°W)"
 
 
 def _severity(members: list[Event]) -> float:
@@ -91,7 +240,7 @@ def _status(priority: float, trend: str) -> str:
 
 
 def compute_hotspots(db: Session) -> None:
-    """Assign events to hotspot clusters and recompute all scores in-place."""
+    """Derive hotspot clusters from event density and compute all scores."""
     now = datetime.utcnow()
 
     # Clear stale assignments so no orphaned state persists across recomputes
@@ -100,16 +249,30 @@ def compute_hotspots(db: Session) -> None:
     )
     db.flush()
 
-    events   = db.query(Event).filter(Event.is_active == True).all()
-    hotspots = db.query(Hotspot).all()
-    if not hotspots:
+    events = db.query(Event).filter(Event.is_active == True).all()
+    if not events:
+        db.query(Hotspot).delete()
         db.commit()
         return
 
-    clusters = _assign_events(events, hotspots)
+    clusters = _cluster_events(events)
 
-    for hotspot in hotspots:
-        members = clusters[hotspot.id]
+    # Replace existing hotspots with dynamically derived ones
+    db.query(Hotspot).delete()
+    db.flush()
+
+    hotspots = []
+    for c in clusters:
+        h = Hotspot(
+            name=_hotspot_name(c["members"]),
+            centroid_lat=c["lat"],
+            centroid_lon=c["lon"],
+        )
+        db.add(h)
+        hotspots.append((h, c["members"]))
+    db.flush()  # populate auto-increment IDs
+
+    for hotspot, members in hotspots:
         trend = _trend(members, now)
 
         for e in members:
@@ -131,4 +294,5 @@ def compute_hotspots(db: Session) -> None:
         hotspot.last_computed_at = now
 
     db.commit()
-    print(f"[hotspot] Computed {len(hotspots)} hotspots from {len(events)} events.")
+    total_assigned = sum(len(m) for _, m in hotspots)
+    print(f"[hotspot] {len(hotspots)} clusters, {total_assigned}/{len(events)} events assigned.")

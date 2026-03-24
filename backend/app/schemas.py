@@ -89,10 +89,16 @@ class HealthResponse(BaseModel):
 
 
 class SystemStatusResponse(BaseModel):
-    last_ingested_at: datetime | None
-    last_computed_at: datetime | None
+    # Data freshness — derived from source tables
+    last_ingested_at: datetime | None   # MAX(events.ingested_at)
+    last_computed_at: datetime | None   # MAX(hotspots.last_computed_at) — compute freshness
     event_count: int
     hotspot_count: int
     is_stale: bool
+    # Scheduler run tracking — derived from ingest_runs table
+    last_run_at:      datetime | None   # when the most recent run started (any status)
+    last_success_at:  datetime | None   # when the most recent successful run finished
+    last_run_status:  str | None        # "success" | "failed" | "running" | null
+    last_error:       str | None        # error from most recent run if it failed; else null
     generated_at: datetime
     db_path: str

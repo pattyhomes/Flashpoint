@@ -73,3 +73,14 @@ class Hotspot(Base):
     status_label: Mapped[str | None] = mapped_column(String(64), nullable=True)  # e.g. "Active Hotspot", "Emerging"
 
     last_computed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class IngestRun(Base):
+    __tablename__ = "ingest_runs"
+
+    id:               Mapped[int]           = mapped_column(Integer, primary_key=True, index=True)
+    started_at:       Mapped[datetime]      = mapped_column(DateTime, nullable=False)
+    finished_at:      Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
+    status:           Mapped[str]           = mapped_column(String(16), nullable=False)  # running | success | failed
+    events_inserted:  Mapped[int]           = mapped_column(Integer, nullable=False, default=0)
+    error_message:    Mapped[str|None]      = mapped_column(Text, nullable=True)

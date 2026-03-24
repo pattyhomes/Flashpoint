@@ -1,5 +1,7 @@
+from datetime import datetime
+
 from app.database import SessionLocal
-from app.models import Event, Hotspot
+from app.models import Event, Hotspot, IngestRun
 from app.services.ingestion.deduper import is_duplicate
 from app.services.ingestion.mock_source import MockSource
 from app.services.scoring.hotspot import compute_hotspots
@@ -17,11 +19,20 @@ _HOTSPOT_SEEDS = [
 
 def run_mock_ingestion():
     """Insert new mock events, skipping any already in the database.
-    Called by the background scheduler — does not wipe existing data."""
+    Called by the background scheduler — does not wipe existing data.
+    Persists an IngestRun record for every attempt; updates it to success or failed."""
     source = MockSource()
     events = source.fetch()
 
     db = SessionLocal()
+
+    # Commit the run record before ingestion begins so it survives any failure.
+    run = IngestRun(started_at=datetime.utcnow(), status="running")
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    run_id = run.id
+
     try:
         inserted = 0
         for event_schema in events:
@@ -30,10 +41,20 @@ def run_mock_ingestion():
             db.add(Event(**event_schema.model_dump()))
             inserted += 1
         db.commit()
+
+        run.status = "success"
+        run.finished_at = datetime.utcnow()
+        run.events_inserted = inserted
+        db.commit()
         print(f"[seed] Inserted {inserted} new mock events.")
         compute_hotspots(db)
     except Exception as e:
-        db.rollback()
+        db.rollback()  # undoes uncommitted event inserts; the IngestRun commit above is unaffected
+        run = db.get(IngestRun, run_id)
+        run.status = "failed"
+        run.finished_at = datetime.utcnow()
+        run.error_message = str(e)[:1000]
+        db.commit()
         print(f"[seed] Error: {e}")
     finally:
         db.close()

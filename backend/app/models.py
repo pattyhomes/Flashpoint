@@ -84,3 +84,4 @@ class IngestRun(Base):
     status:           Mapped[str]           = mapped_column(String(16), nullable=False)  # running | success | failed
     events_inserted:  Mapped[int]           = mapped_column(Integer, nullable=False, default=0)
     error_message:    Mapped[str|None]      = mapped_column(Text, nullable=True)
+    ingest_source:    Mapped[str|None]      = mapped_column(String(32), nullable=True)   # "mock" | "gdelt" | null (legacy)

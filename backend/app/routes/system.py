@@ -19,9 +19,10 @@ def system_status(db: Session = Depends(get_db)):
     event_count   = db.query(func.count(Event.id)).filter(Event.is_active == True).scalar() or 0
     hotspot_count = db.query(func.count(Hotspot.id)).scalar() or 0
 
-    # Most recent run of any status
+    # Most recent run of any status — filtered to the configured source
     last_run = (
         db.query(IngestRun)
+        .filter(IngestRun.ingest_source == settings.ingest_source)
         .order_by(IngestRun.started_at.desc())
         .first()
     )
@@ -29,8 +30,11 @@ def system_status(db: Session = Depends(get_db)):
     # Most recent successful run — use finished_at as the authoritative success timestamp
     last_success = (
         db.query(IngestRun)
-        .filter(IngestRun.status == "success")
-        .order_by(IngestRun.started_at.desc())
+        .filter(
+            IngestRun.ingest_source == settings.ingest_source,
+            IngestRun.status == "success",
+        )
+        .order_by(IngestRun.finished_at.desc())
         .first()
     )
 

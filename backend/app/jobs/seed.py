@@ -31,6 +31,7 @@ def run_mock_ingestion():
             inserted += 1
         db.commit()
         print(f"[seed] Inserted {inserted} new mock events.")
+        compute_hotspots(db)
     except Exception as e:
         db.rollback()
         print(f"[seed] Error: {e}")

@@ -86,3 +86,13 @@ class HealthResponse(BaseModel):
     service: str
     db_status: str
     timestamp: str
+
+
+class SystemStatusResponse(BaseModel):
+    last_ingested_at: datetime | None
+    last_computed_at: datetime | None
+    event_count: int
+    hotspot_count: int
+    is_stale: bool
+    generated_at: datetime
+    db_path: str

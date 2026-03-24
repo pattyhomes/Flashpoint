@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { fetchEvents, fetchHotspots, fetchPriorities } from './services/api.js'
+import { fetchEvents, fetchHotspots, fetchPriorities, fetchSystemStatus } from './services/api.js'
 
 import Shell from './components/layout/Shell.jsx'
 import StatusBar from './components/layout/StatusBar.jsx'
@@ -13,8 +13,9 @@ export default function App() {
   const [events, setEvents]       = useState([])
   const [hotspots, setHotspots]   = useState([])
   const [priorities, setPriorities] = useState([])
-  const [loading, setLoading]     = useState(true)
+  const [loading, setLoading]         = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [systemStatus, setSystemStatus] = useState(null)
 
   const [selectedItem, setSelectedItem] = useState(null)
   const [activeTypes, setActiveTypes]   = useState(new Set())
@@ -25,11 +26,12 @@ export default function App() {
 
   // Fetch all data once on mount
   useEffect(() => {
-    Promise.all([fetchEvents(), fetchHotspots(), fetchPriorities()])
-      .then(([ev, hs, pr]) => {
+    Promise.all([fetchEvents(), fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
+      .then(([ev, hs, pr, status]) => {
         setEvents(ev)
         setHotspots(hs)
         setPriorities(pr)
+        setSystemStatus(status)
         setLastUpdated(new Date())
       })
       .catch(err => console.error('[Flashpoint] fetch error:', err))
@@ -144,7 +146,7 @@ export default function App() {
         />
       }
       status={
-        <StatusBar lastUpdated={lastUpdated} loading={loading} />
+        <StatusBar lastUpdated={lastUpdated} loading={loading} systemStatus={systemStatus} />
       }
     />
   )

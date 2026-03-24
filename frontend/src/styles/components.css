@@ -598,3 +598,38 @@
   font-size: var(--text-xs);
   color: var(--accent);
 }
+
+.status-bar__counts {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.status-bar__badges {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  margin-left: auto;
+}
+
+.status-bar__badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.status-bar__badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.status-bar__badge--stale   { color: var(--sev-high); }
+.status-bar__badge--failed  { color: var(--trend-escalating); }
+.status-bar__badge--syncing { color: var(--accent); }

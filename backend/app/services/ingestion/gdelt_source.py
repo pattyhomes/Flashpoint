@@ -50,27 +50,11 @@ _ROOT_TO_EVENT_TYPE = {
     "18": "violence",
 }
 
-# Human-readable CAMEO descriptions (EventCode then EventRootCode as fallback)
-_CAMEO_DESC = {
-    "14": "protest", "140": "protest",
-    "141": "demonstration or rally",
-    "142": "hunger strike",
-    "143": "strike or boycott",
-    "144": "blockade or obstruction",
-    "145": "violent protest or riot",
-    "17": "coercive action", "170": "coercive action",
-    "171": "property seizure or damage",
-    "172": "bombing",
-    "173": "suicide bombing",
-    "174": "violent repression",
-    "175": "curfew or sanctions",
-    "176": "arrest or detention",
-    "18": "assault", "180": "unconventional violence",
-    "181": "kidnapping or hostage taking",
-    "182": "physical assault",
-    "183": "bombing",
-    "185": "assassination attempt",
-    "186": "assassination",
+# Root-level label for display titles — intentionally generic to avoid overclaiming
+_ROOT_TO_LABEL = {
+    "14": "protest",
+    "17": "civil unrest",
+    "18": "violence",
 }
 
 
@@ -170,16 +154,12 @@ def _row_to_event(row: list[str]) -> EventCreate | None:
     # Event type
     event_type = _ROOT_TO_EVENT_TYPE.get(root_code, "unrest")
 
-    # Title
+    # Title — root-level template only; no CAMEO sub-code phrases, no actor attribution
     event_code = row[_C["EventCode"]].strip()
-    event_desc = _CAMEO_DESC.get(event_code) or _CAMEO_DESC.get(root_code) or "civil disturbance"
-    location_label = city or (full_name.split(",")[0].strip() if full_name else "unknown location")
     actor = row[_C["Actor1Name"]].strip()
-    # Only use actor name if it looks like a real name (longer than a 3-char code)
-    if actor and len(actor) > 3:
-        title = f"{actor}: {event_desc} in {location_label}"
-    else:
-        title = f"{event_desc.capitalize()} in {location_label}"
+    label = _ROOT_TO_LABEL.get(root_code, "unrest")
+    location_label = city or (full_name.split(",")[0].strip() if full_name else "unknown location")
+    title = f"{label.capitalize()} — {location_label}"
 
     # Severity: GoldsteinScale is -10 (destabilising) to +10 (stabilising)
     # Map to 0–1 where 1 = most destabilising

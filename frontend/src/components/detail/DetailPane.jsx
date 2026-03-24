@@ -83,9 +83,13 @@ function hotspotSummary(h, nearbyEvents) {
 
 function EventDetail({ event }) {
   const location = [event.city, event.state].filter(Boolean).join(', ') || event.country
+  const isGdelt = event.source_name === 'gdelt'
+  const displayTitle = isGdelt
+    ? `${event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)} coded signal — ${location}`
+    : event.title
   return (
     <div className="detail-body">
-      <div className="detail-title">{event.title}</div>
+      <div className="detail-title">{displayTitle}</div>
 
       <div className="detail-row">
         <span className="detail-row__label">Type</span>
@@ -96,6 +100,15 @@ function EventDetail({ event }) {
           {event.event_type}
         </span>
       </div>
+
+      {isGdelt && (
+        <div className="detail-row">
+          <span className="detail-row__label">Signal</span>
+          <span className="detail-row__value detail-row__value--muted">
+            GDELT coded signal · {event.source_count} source{event.source_count !== 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
 
       <div className="detail-meta">
         <div className="detail-row">
@@ -116,7 +129,7 @@ function EventDetail({ event }) {
           <span className="detail-row__label">Source</span>
           <span className="detail-row__value">{event.source_name}</span>
         </div>
-        {event.source_count > 1 && (
+        {(isGdelt || event.source_count > 1) && (
           <div className="detail-row">
             <span className="detail-row__label">Sources</span>
             <span className="detail-row__value">{event.source_count}</span>
@@ -203,8 +216,12 @@ function HotspotDetail({ hotspot, events }) {
           : nearby.map(e => (
               <div key={e.id} className="hotspot-event-row">
                 <span className="hotspot-event-row__dot" style={{ backgroundColor: severityColor(e.severity_score) }} />
-                <span className="hotspot-event-row__type">{e.event_type}</span>
-                <span className="hotspot-event-row__title">{e.title}</span>
+                <span className="hotspot-event-row__type">{e.source_name === 'gdelt' ? 'GDELT' : e.event_type}</span>
+                <span className="hotspot-event-row__title">
+                  {e.source_name === 'gdelt'
+                    ? `${e.event_type} signal — ${e.city || e.country}`
+                    : e.title}
+                </span>
                 <span className="hotspot-event-row__time">{relativeTime(e.occurred_at)}</span>
               </div>
             ))

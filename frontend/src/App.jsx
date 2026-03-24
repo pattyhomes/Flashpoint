@@ -80,6 +80,7 @@ export default function App() {
     if (e.severity_score   < minSeverity)                            return false
     if (e.confidence_score < minConfidence)                          return false
     if (activeTrends.size  > 0 && !activeTrends.has(e.trend_state)) return false
+    if (e.source_name === 'gdelt' && e.source_count < 2)             return false  // GDELT quality gate
     return true
   }), [events, activeTypes, minSeverity, minConfidence, activeTrends])
 

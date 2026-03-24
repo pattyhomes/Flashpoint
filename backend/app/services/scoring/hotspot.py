@@ -149,28 +149,45 @@ def _cluster_events(events: list[Event]) -> list[dict]:
     return candidates[:MAX_HOTSPOTS]
 
 
-def _hotspot_name(members: list[Event]) -> str:
-    # 1. City: most common city that is NOT a state/country-level label and NOT a county/parish
-    cities = [e.city for e in members
-              if e.city
-              and e.city not in _US_STATE_NAMES
-              and e.city not in _COUNTRY_LEVEL_LABELS
-              and "county" not in e.city.lower()
-              and "parish" not in e.city.lower()
-              and e.city != e.state]
-    if cities:
-        best = max(set(cities), key=cities.count)
-        states = [e.state for e in members if e.city == best and e.state]
+def _hotspot_name(members: list[Event], centroid_lat: float, centroid_lon: float) -> str:
+    def _rank(events: list) -> float:
+        """Proximity-weighted frequency: count / (1 + mean_dist_miles / SCALE).
+        Higher score = more representative of the cluster center."""
+        if not events:
+            return 0.0
+        mean_dist = (
+            sum(_haversine_miles(centroid_lat, centroid_lon, e.latitude, e.longitude)
+                for e in events)
+            / len(events)
+        )
+        return len(events) / (1.0 + mean_dist / 50.0)
+
+    # 1. City: most representative precise city (proximity-weighted frequency)
+    city_groups: dict[str, list] = defaultdict(list)
+    for e in members:
+        if (e.city
+                and e.city not in _US_STATE_NAMES
+                and e.city not in _COUNTRY_LEVEL_LABELS
+                and "county" not in e.city.lower()
+                and "parish" not in e.city.lower()
+                and e.city != e.state):
+            city_groups[e.city].append(e)
+
+    if city_groups:
+        best = max(city_groups, key=lambda c: _rank(city_groups[c]))
+        states = [e.state for e in city_groups[best] if e.state]
         st = max(set(states), key=states.count) if states else None
         return f"{best}, {st}" if st else best
 
-    # 2. County/Parish
-    counties = [e.city for e in members
-                if e.city and ("county" in e.city.lower()
-                               or "parish" in e.city.lower())]
-    if counties:
-        best = max(set(counties), key=counties.count)
-        states = [e.state for e in members if e.city == best and e.state]
+    # 2. County/Parish: same proximity-weighted ranking
+    county_groups: dict[str, list] = defaultdict(list)
+    for e in members:
+        if e.city and ("county" in e.city.lower() or "parish" in e.city.lower()):
+            county_groups[e.city].append(e)
+
+    if county_groups:
+        best = max(county_groups, key=lambda c: _rank(county_groups[c]))
+        states = [e.state for e in county_groups[best] if e.state]
         st = max(set(states), key=states.count) if states else None
         return f"{best}, {st}" if st else best
 
@@ -182,9 +199,7 @@ def _hotspot_name(members: list[Event]) -> str:
         return f"{full_name} region"
 
     # 4. Coordinate fallback
-    lat = sum(e.latitude  for e in members) / len(members)
-    lon = sum(e.longitude for e in members) / len(members)
-    return f"Cluster ({lat:.1f}°N, {abs(lon):.1f}°W)"
+    return f"Cluster ({centroid_lat:.1f}°N, {abs(centroid_lon):.1f}°W)"
 
 
 def _severity(members: list[Event]) -> float:
@@ -264,7 +279,7 @@ def compute_hotspots(db: Session) -> None:
     hotspots = []
     for c in clusters:
         h = Hotspot(
-            name=_hotspot_name(c["members"]),
+            name=_hotspot_name(c["members"], c["lat"], c["lon"]),
             centroid_lat=c["lat"],
             centroid_lon=c["lon"],
         )

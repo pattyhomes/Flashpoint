@@ -2,8 +2,13 @@
 
 This directory contains Pi-facing runtime artifacts for Flashpoint on Raspberry Pi OS.
 
-**Transitional:** This is scaffolding for the current PySide6 + FastAPI architecture.
+**Transitional:** This is scaffolding for the current Qt shell + FastAPI architecture.
 It is not a production installer. See notes on known gaps below.
+
+**Qt bindings on Pi:** The desktop shell uses system-native PyQt5 on Raspberry Pi OS
+(`python3-pyqt5 python3-pyqt5.qtwebengine`) rather than pip-installed PySide6. This
+avoids the `libwebp.so.6` / `.so.7` ABI mismatch in pip-distributed PySide6 wheels.
+Mac development continues to use pip-installed PySide6 as before.
 
 ---
 
@@ -30,7 +35,7 @@ Pi boots
         │           uvicorn app.main:app --host 127.0.0.1 --port 8000
         └── desktop compositor starts
               └── ~/.config/autostart/flashpoint.desktop runs pi_start.sh
-                    └── PySide6 shell launches (FLASHPOINT_MANAGED=1)
+                    └── Qt shell launches (FLASHPOINT_MANAGED=1)
                           shell health poller → polls 127.0.0.1:8000 (up to ~20s)
                           → READY: loads React UI in fullscreen webview
 ```
@@ -48,15 +53,37 @@ Before running the install script, ensure:
 
 1. **Raspberry Pi OS 64-bit with desktop** (Bookworm recommended)
 2. **Repo is cloned** at a stable path (e.g. `/home/pi/flashpoint`)
-3. **Python venv created and dependencies installed:**
+3. **System Qt packages installed** (required before creating the venv):
+   ```bash
+   sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine
+   ```
+   The shell uses system-native PyQt5 on Pi. pip-installed PySide6 has a library
+   ABI mismatch on Bookworm (`libwebp.so.6` vs `.so.7`) and must NOT be used.
+
+4. **Python venv created with `--system-site-packages`:**
+
+   The venv MUST be created with `--system-site-packages` so the shell can access
+   the system-installed PyQt5. A plain venv will NOT work.
+
    ```bash
    cd /home/pi/flashpoint
-   python3 -m venv .venv
+   python3 -m venv --system-site-packages .venv
    source .venv/bin/activate
-   pip install -e .                      # backend + aiofiles (reads pyproject.toml)
-   pip install -r desktop/requirements.txt  # PySide6
+   pip install -e .           # backend deps from pyproject.toml (reads pyproject.toml)
+   # Do NOT run: pip install -r desktop/requirements.txt
+   # desktop/requirements.txt installs PySide6, which is Mac-only.
    ```
-4. **Frontend built** — the backend serves `frontend/dist/` as static files.
+
+   **Migrating an existing Pi setup:** If a `.venv` already exists from an earlier
+   setup (which would have pip-installed PySide6), you MUST delete and recreate it:
+   ```bash
+   rm -rf .venv
+   python3 -m venv --system-site-packages .venv
+   source .venv/bin/activate
+   pip install -e .
+   ```
+   A mixed environment (old venv + system PyQt5) will produce confusing import errors.
+5. **Frontend built** — the backend serves `frontend/dist/` as static files.
    Build it on the Pi (requires Node.js) or build on your Mac and rsync it over.
 
    **Option A — Build on Pi:**
@@ -78,12 +105,12 @@ Before running the install script, ensure:
    to serve the API — the shell will show "Could not load the frontend" until the build
    is present and the backend is restarted.
 
-5. **`.env` file present** at repo root:
+6. **`.env` file present** at repo root:
    ```bash
    cp .env.example .env
    # Edit .env: set MOCK_DATA_ENABLED=true and INGEST_SOURCE=mock for initial testing
    ```
-6. **Auto-login configured** (see below)
+7. **Auto-login configured** (see below)
 
 ### Configuring Auto-Login
 
@@ -126,6 +153,9 @@ The desktop autostart entry takes effect on next login. Log out and back in, or 
 ## Verifying Each Component
 
 ```bash
+# Verify Qt bindings are accessible in the venv
+.venv/bin/python -c "from desktop.app.qt_compat import QApplication, QWebEngineView, Signal; print('Qt OK')"
+
 # Backend service status
 systemctl --user status flashpoint-backend
 
@@ -190,5 +220,6 @@ systemctl --user daemon-reload
 | `FLASHPOINT_FULLSCREEN` | `1` | Shell opens fullscreen (`showFullScreen()`) |
 | `FLASHPOINT_DEV_QUIT` | `0` | Custom `QShortcut` (Ctrl+Q) not registered |
 | `FLASHPOINT_BACKEND_HEALTH_URL` | `http://127.0.0.1:8000/api/v1/health` | Explicit IPv4 — avoids `localhost`→`::1` ambiguity |
+| `FLASHPOINT_FRONTEND_URL` | `http://127.0.0.1:8000` | Backend serves frontend/dist/ at root — same host:port |
 
 All seam vars are documented in `.env.example` and `desktop/app/config.py`.

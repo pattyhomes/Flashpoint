@@ -16,7 +16,7 @@ See desktop/README.md for full context and Pi future-readiness notes.
 """
 import sys
 
-from PySide6.QtWidgets import QApplication
+from desktop.app.qt_compat import QApplication
 
 from desktop.app import config
 from desktop.app.window import MainWindow

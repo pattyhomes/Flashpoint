@@ -20,17 +20,21 @@ import os
 from urllib.request import urlopen
 
 from desktop.app import config
-from PySide6.QtCore import Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWidgets import (
+from desktop.app.qt_compat import (
+    Qt,
     QApplication,
+    QKeySequence,
     QLabel,
     QMainWindow,
     QPushButton,
+    QShortcut,
     QStackedWidget,
+    QThread,
+    QUrl,
     QVBoxLayout,
+    QWebEngineView,
     QWidget,
+    Signal,
 )
 
 # ---------------------------------------------------------------------------
@@ -42,9 +46,8 @@ from PySide6.QtWidgets import (
 # Fallback strings come from config.STANDALONE_* so they have one definition.
 #
 # FRONTEND_URL in dev:  Vite dev server proxies /api → backend.
-# FRONTEND_URL on Pi:   Will point to the backend serving the built frontend
-#                       once static-file serving is added to FastAPI
-#                       (Milestone B/C work).
+# FRONTEND_URL on Pi:   Backend serves frontend/dist/ via StaticFiles at '/'.
+#                       pi_start.sh sets FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000.
 #
 # All other constants (poll settings, Pi seams) come from desktop.app.config.
 # ---------------------------------------------------------------------------
@@ -159,16 +162,16 @@ class _OverlayWidget(QWidget):
         self.setStyleSheet(_OVERLAY_CSS)
 
         layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setAlignment(Qt.AlignCenter)
         layout.setSpacing(16)
 
         name_label = QLabel("FLASHPOINT")
         name_label.setObjectName("app-name")
-        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        name_label.setAlignment(Qt.AlignCenter)
 
         self._status_label = QLabel("Connecting…")
         self._status_label.setObjectName("status")
-        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status_label.setAlignment(Qt.AlignCenter)
 
         self._retry_btn = QPushButton("Retry")
         self._retry_btn.setObjectName("retry")
@@ -216,7 +219,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Flashpoint")
         self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window
+            Qt.FramelessWindowHint | Qt.Window
         )
 
         # Stacked widget: index 0 = native overlay, index 1 = web view
@@ -230,7 +233,7 @@ class MainWindow(QMainWindow):
 
         # Page 1 — embedded web UI
         self._webview = QWebEngineView()
-        self._webview.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+        self._webview.setContextMenuPolicy(Qt.NoContextMenu)
         self._webview.loadFinished.connect(self._on_load_finished)
         self._stack.addWidget(self._webview)
 

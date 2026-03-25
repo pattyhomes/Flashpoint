@@ -3,7 +3,7 @@
 ## Architecture
 
 **Transitional hybrid.** The desktop shell wraps the existing React/Vite frontend
-in a PySide6 fullscreen window via `QWebEngineView`. The FastAPI backend and React
+in a fullscreen Qt window via `QWebEngineView`. The FastAPI backend and React
 frontend are unchanged — the shell contributes:
 
 - Fullscreen native window, no browser chrome
@@ -16,10 +16,27 @@ selected surfaces (status bar, startup screen, settings) will move to native Qt 
 The map and event feed will remain web-rendered.
 
 ```
-PySide6 Shell (fullscreen)
+Qt Shell (fullscreen)  — PySide6 on Mac, PyQt5 on Pi
 └── QWebEngineView ← React/Vite frontend (localhost:5178 in orchestrated dev)
                        └── /api/* proxied to FastAPI backend (localhost:8001)
 ```
+
+---
+
+## Platform Dependencies
+
+The shell imports Qt through `desktop/app/qt_compat.py`, which tries PySide6 first and
+falls back to PyQt5. This splits cleanly by platform:
+
+| Platform | Qt binding | How to install |
+|---|---|---|
+| **Mac** | PySide6 (pip) | `pip install -r desktop/requirements.txt` |
+| **Raspberry Pi OS** | PyQt5 (system) | `sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine` |
+
+**Pi venv requirement:** Must be created with `--system-site-packages` so Python can see
+the system-installed PyQt5. See `deploy/pi/README.md` for the full Pi setup. Do NOT run
+`pip install -r desktop/requirements.txt` on Pi — it would install PySide6, which has a
+library ABI mismatch on Bookworm.
 
 ---
 
@@ -32,20 +49,19 @@ PySide6 Shell (fullscreen)
 ```bash
 # From the repo root
 source .venv/bin/activate
-pip install -r backend/requirements.txt
+pip install -e .
 pip install -r desktop/requirements.txt
 cp .env.example .env   # if not already done
 ```
 
 PySide6 is ~400MB. Install once; it sits in `.venv/`.
 
-### 2. Verify PySide6
+### 2. Verify Qt
 
 ```bash
 .venv/bin/python -c "
-from PySide6.QtWidgets import QApplication
-from PySide6.QtWebEngineWidgets import QWebEngineView
-print('PySide6 OK')
+from desktop.app.qt_compat import QApplication, QWebEngineView
+print('Qt OK')
 "
 ```
 

@@ -1,1 +1,3 @@
+# Mac development only.
+# On Raspberry Pi OS, use system PyQt5 instead — see deploy/pi/README.md.
 PySide6>=6.6.0

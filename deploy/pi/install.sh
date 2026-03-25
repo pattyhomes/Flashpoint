@@ -41,7 +41,11 @@ echo
 
 if [ ! -f "$REPO_ROOT/.venv/bin/python" ]; then
     echo "Error: .venv not found at $REPO_ROOT/.venv"
-    echo "Run: python3 -m venv .venv && pip install -r backend/requirements.txt desktop/requirements.txt"
+    echo "Run on Pi:"
+    echo "  sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine"
+    echo "  python3 -m venv --system-site-packages .venv"
+    echo "  source .venv/bin/activate && pip install -e ."
+    echo "See deploy/pi/README.md for full setup instructions."
     exit 1
 fi
 
@@ -117,7 +121,8 @@ else
     echo "4. The desktop autostart entry takes effect on next login."
     echo "   Log out and back in (or reboot) to test."
     echo
-    echo "Note: The shell requires a frontend URL to display the dashboard UI."
-    echo "Until the frontend is built and served statically, the shell will show"
-    echo "a connection error after backend is ready. See deploy/pi/README.md."
+    echo "Note: Ensure frontend/dist/ is built before starting the backend."
+    echo "  cd frontend && npm run build"
+    echo "If not built, the backend serves the API only and the shell will show"
+    echo "'Could not load the frontend'. See deploy/pi/README.md for details."
 fi

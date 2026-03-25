@@ -17,8 +17,8 @@ The map and event feed will remain web-rendered.
 
 ```
 PySide6 Shell (fullscreen)
-└── QWebEngineView ← React/Vite frontend (localhost:5173 in dev)
-                       └── /api/* proxied to FastAPI backend (localhost:8000)
+└── QWebEngineView ← React/Vite frontend (localhost:5178 in orchestrated dev)
+                       └── /api/* proxied to FastAPI backend (localhost:8001)
 ```
 
 ---
@@ -27,17 +27,19 @@ PySide6 Shell (fullscreen)
 
 **Prerequisites:** Python 3.11+, Node.js 18+, existing repo venv at `.venv/`
 
-### 1. Install PySide6
+### 1. Install dependencies
 
 ```bash
 # From the repo root
 source .venv/bin/activate
+pip install -r backend/requirements.txt
 pip install -r desktop/requirements.txt
+cp .env.example .env   # if not already done
 ```
 
 PySide6 is ~400MB. Install once; it sits in `.venv/`.
 
-### 2. Verify the install
+### 2. Verify PySide6
 
 ```bash
 .venv/bin/python -c "
@@ -47,23 +49,32 @@ print('PySide6 OK')
 "
 ```
 
-### 3. Run (3 terminals)
+### 3. Run (one command)
 
 ```bash
-# Terminal 1 — backend
-bash scripts/dev_backend.sh
-
-# Terminal 2 — frontend dev server
-cd frontend && npm run dev
-
-# Terminal 3 — desktop shell
-bash scripts/dev_desktop.sh
+bash scripts/run.sh
 ```
 
-The shell will show "Connecting…" until the backend responds to
-`GET /api/v1/health`, then load the React UI inside the window.
+This starts backend (port 8001), frontend dev server (port 5178), and the PySide6
+shell together. Readiness is verified before each step. All processes clean up when
+the shell exits.
 
-**Quit:** `Ctrl+Q`
+**Quit:** `Ctrl+Q` in the shell window, or `Ctrl+C` in the terminal.
+
+---
+
+## Managed Ports
+
+The orchestrated path uses dedicated ports to avoid collisions with standalone dev sessions:
+
+| Service | Orchestrated (`run.sh`) | Standalone |
+|---|---|---|
+| Backend | 8001 | 8000 |
+| Frontend | 5178 | 5173 |
+
+The shell reads its URLs from `FLASHPOINT_BACKEND_HEALTH_URL` and `FLASHPOINT_FRONTEND_URL`
+env vars (set by the launcher before importing the shell). Standalone `dev_desktop.sh`
+sets no env vars, so the shell falls back to the 8000/5173 defaults.
 
 ---
 
@@ -84,33 +95,66 @@ the full sequence: backend health poll → frontend load.
 
 ---
 
+## Debugging / Individual Processes
+
+When you need to run components separately (e.g. to debug startup):
+
+```bash
+# Backend only (port 8000)
+bash scripts/dev_backend.sh
+
+# Frontend only (port 5173, proxies /api to 8000)
+cd frontend && npm run dev
+
+# Shell only (requires backend + frontend already running on 8000/5173)
+bash scripts/dev_desktop.sh
+```
+
+---
+
 ## Config
 
-Runtime constants are at the top of `desktop/app/window.py`:
+Shell runtime constants are at the top of `desktop/app/window.py`:
 
 ```python
-BACKEND_HEALTH_URL      = "http://localhost:8000/api/v1/health"
-FRONTEND_URL            = "http://localhost:5173"   # Vite dev; change for Pi
+BACKEND_HEALTH_URL  # reads FLASHPOINT_BACKEND_HEALTH_URL env var; fallback: localhost:8000
+FRONTEND_URL        # reads FLASHPOINT_FRONTEND_URL env var; fallback: localhost:5173
 HEALTH_POLL_INTERVAL_MS = 2_000
 HEALTH_POLL_TIMEOUT_S   = 3
 HEALTH_MAX_FAILURES     = 10
 ```
 
-For Pi production, `FRONTEND_URL` will point to the backend serving the built
-frontend (requires static-file serving to be added to FastAPI — Milestone B/C work).
+Launcher managed-port constants are at the top of `desktop/app/launcher.py`:
+
+```python
+MANAGED_BACKEND_PORT  = 8001
+MANAGED_FRONTEND_PORT = 5178
+```
 
 ---
 
 ## Pi Future-Readiness
 
-This scaffold is structured for later work:
+### FLASHPOINT_MANAGED=1
+
+Set this env var to skip subprocess management in the launcher and go straight to
+the shell. The shell's health poller is the readiness gate. Use this when services
+are managed externally (systemd, autostart).
+
+Pi autostart entry (`~/.config/labwc/autostart`) can be as simple as:
+
+```
+FLASHPOINT_MANAGED=1 bash /path/to/repo/scripts/run.sh &
+```
+
+### Future milestone table
 
 | Future milestone | What to add |
 |---|---|
-| Pi autostart | `~/.config/labwc/autostart` or systemd user service launching `dev_desktop.sh` |
-| Backend service | `systemd` unit managing `uvicorn`; shell waits for it via health poll (already wired) |
+| Pi autostart | `~/.config/labwc/autostart` or systemd user service with `FLASHPOINT_MANAGED=1` |
+| Backend service | `systemd` unit managing `uvicorn`; shell waits via health poll (already wired) |
 | Portrait / touch | Window geometry tuning, touch-friendly Qt event handling |
-| Frontend URL | Change `FRONTEND_URL` → `http://localhost:8000` once FastAPI serves built frontend |
+| Frontend URL | Change `FLASHPOINT_FRONTEND_URL` → `http://localhost:8000` once FastAPI serves built frontend |
 | Remove Ctrl+Q | Guard the shortcut behind a `DEV_MODE` env var |
 | Native surfaces | Replace overlay widget → richer native startup screen |
 

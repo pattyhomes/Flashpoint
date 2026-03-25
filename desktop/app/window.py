@@ -16,6 +16,7 @@ native Qt widgets. The map and feed will remain web-rendered.
 
 See desktop/README.md for the full transitional-architecture rationale.
 """
+import os
 from urllib.request import urlopen
 
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
@@ -34,17 +35,24 @@ from PySide6.QtWidgets import (
 # ---------------------------------------------------------------------------
 # Runtime config
 #
-# TRANSITIONAL: These are hard-coded for dev (Mac). For Pi production, read
-# from environment variables or a config file (future work).
+# URLs are read from environment variables so the launcher can inject managed
+# ports (8001/5178) for the orchestrated path without changing this file.
+# Standalone dev (dev_desktop.sh) sets no env vars → falls back to defaults.
 #
 # FRONTEND_URL in dev:  Vite dev server proxies /api → backend.
-# FRONTEND_URL on Pi:   Will point to the backend serving the built frontend,
-#                       e.g. http://localhost:8000 once static-file serving
-#                       is added to FastAPI (Milestone B/C work).
+# FRONTEND_URL on Pi:   Will point to the backend serving the built frontend
+#                       once static-file serving is added to FastAPI
+#                       (Milestone B/C work).
 # ---------------------------------------------------------------------------
 
-BACKEND_HEALTH_URL      = "http://localhost:8000/api/v1/health"
-FRONTEND_URL            = "http://localhost:5173"   # Vite dev server
+BACKEND_HEALTH_URL = os.environ.get(
+    "FLASHPOINT_BACKEND_HEALTH_URL",
+    "http://localhost:8000/api/v1/health",   # standalone dev default
+)
+FRONTEND_URL = os.environ.get(
+    "FLASHPOINT_FRONTEND_URL",
+    "http://localhost:5173",                 # standalone dev default
+)
 HEALTH_POLL_INTERVAL_MS = 2_000   # ms between poll attempts
 HEALTH_POLL_TIMEOUT_S   = 3       # per-request HTTP timeout
 HEALTH_MAX_FAILURES     = 10      # give up after this many consecutive failures

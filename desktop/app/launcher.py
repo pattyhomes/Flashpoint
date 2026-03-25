@@ -16,7 +16,8 @@ Startup sequence (unmanaged / dev mode):
   6. Start frontend subprocess (npm run dev on 5178) in its own session,
      with VITE_PORT and VITE_BACKEND_PORT injected
   7. Poll HTTP GET 127.0.0.1:5178 until a response is received or timeout
-  8. Call desktop.app.main.main() inline — blocks until the shell exits (Ctrl+Q)
+  8. Call desktop.app.main.main() inline — blocks until the shell exits
+     (Command+Q on macOS, Ctrl+Q on Windows/Linux)
   9. Finally: terminate frontend process group, then backend process group
 
 Process groups: start_new_session=True puts each child in its own session so all

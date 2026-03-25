@@ -3,8 +3,8 @@
 #
 # Starts backend (port 8001), frontend dev server (port 5178), and the
 # PySide6 desktop shell together with proper readiness sequencing.
-# All three processes are cleaned up when the shell exits (Ctrl+Q) or
-# when this terminal receives Ctrl+C.
+# All three processes are cleaned up when the shell exits
+# (Command+Q on macOS / Ctrl+Q on Windows/Linux) or when this terminal receives Ctrl+C.
 #
 # Prerequisites: .venv with PySide6 + uvicorn, Node.js / npm, .env file
 #   pip install -r backend/requirements.txt desktop/requirements.txt

@@ -8,7 +8,7 @@
 # The shell polls the backend health endpoint, then loads the frontend
 # (http://localhost:5173) inside a fullscreen QWebEngineView.
 #
-# Quit: Ctrl+Q
+# Quit: Command+Q (macOS) / Ctrl+Q (Windows/Linux)
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

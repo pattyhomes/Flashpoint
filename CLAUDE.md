@@ -54,7 +54,7 @@ Chromium kiosk mode is superseded. Do not plan or implement Chromium-based deliv
 
 ### Desktop (all-in-one — preferred)
 ```bash
-bash scripts/run.sh   # starts backend (8001), frontend (5178), PySide6 shell; Ctrl+Q to quit
+bash scripts/run.sh   # starts backend (8001), frontend (5178), PySide6 shell; Command+Q (macOS) / Ctrl+Q to quit
 ```
 
 ### Backend only (port 8000)
@@ -72,7 +72,7 @@ cd frontend && npm run dev
 
 ### Shell only (requires backend + frontend on 8000/5173)
 ```bash
-bash scripts/dev_desktop.sh   # Ctrl+Q to quit
+bash scripts/dev_desktop.sh   # Command+Q (macOS) / Ctrl+Q to quit
 ```
 
 ### Seed mock data

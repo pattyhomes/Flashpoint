@@ -59,7 +59,7 @@ This starts backend (port 8001), frontend dev server (port 5178), and the PySide
 shell together. Readiness is verified before each step. All processes clean up when
 the shell exits.
 
-**Quit:** `Ctrl+Q` in the shell window, or `Ctrl+C` in the terminal.
+**Quit:** `Command+Q` (macOS) / `Ctrl+Q` (Windows/Linux) in the shell window, or `Ctrl+C` in the terminal.
 
 ---
 
@@ -155,7 +155,7 @@ FLASHPOINT_MANAGED=1 bash /path/to/repo/scripts/run.sh &
 | Backend service | `systemd` unit managing `uvicorn`; shell waits via health poll (already wired) |
 | Portrait / touch | Window geometry tuning, touch-friendly Qt event handling |
 | Frontend URL | Change `FLASHPOINT_FRONTEND_URL` → `http://localhost:8000` once FastAPI serves built frontend |
-| Remove Ctrl+Q | Guard the shortcut behind a `DEV_MODE` env var |
+| Remove quit shortcut | Guard `Ctrl+Q` / `Command+Q` behind a `DEV_MODE` env var |
 | Native surfaces | Replace overlay widget → richer native startup screen |
 
 ---

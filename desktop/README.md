@@ -38,6 +38,9 @@ the system-installed PyQt5. See `deploy/pi/README.md` for the full Pi setup. Do 
 `pip install -r desktop/requirements.txt` on Pi — it would install PySide6, which has a
 library ABI mismatch on Bookworm.
 
+**Migrating an existing Pi setup:** Run `bash scripts/pi_fix_qt_runtime.sh` to automate
+the migration (deletes old venv, reinstalls with system-site-packages, verifies Qt).
+
 ---
 
 ## Dev Setup (Mac)

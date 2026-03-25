@@ -83,6 +83,7 @@ Before running the install script, ensure:
    pip install -e .
    ```
    A mixed environment (old venv + system PyQt5) will produce confusing import errors.
+   Or run the migration script: `bash scripts/pi_fix_qt_runtime.sh`
 5. **Frontend built** — the backend serves `frontend/dist/` as static files.
    Build it on the Pi (requires Node.js) or build on your Mac and rsync it over.
 

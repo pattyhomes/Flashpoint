@@ -15,7 +15,7 @@ Startup sequence (unmanaged / dev mode):
   5. Poll /api/v1/health until HTTP 200 or timeout
   6. Start frontend subprocess (npm run dev on 5178) in its own session,
      with VITE_PORT and VITE_BACKEND_PORT injected
-  7. Poll TCP 127.0.0.1:5178 until accepting connections or timeout
+  7. Poll HTTP GET 127.0.0.1:5178 until a response is received or timeout
   8. Call desktop.app.main.main() inline — blocks until the shell exits (Ctrl+Q)
   9. Finally: terminate frontend process group, then backend process group
 
@@ -50,7 +50,6 @@ MANAGED_BACKEND_PORT = 8001
 MANAGED_FRONTEND_PORT = 5178
 
 MANAGED_BACKEND_HEALTH_URL = f"http://127.0.0.1:{MANAGED_BACKEND_PORT}/api/v1/health"
-MANAGED_FRONTEND_HOST = "127.0.0.1"
 MANAGED_FRONTEND_URL = f"http://127.0.0.1:{MANAGED_FRONTEND_PORT}"
 
 BACKEND_READY_TIMEOUT_S = 30
@@ -71,41 +70,23 @@ def _check_port_free(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) != 0
 
 
-def _wait_for_http(url: str, timeout_s: int, proc: subprocess.Popen) -> None:
+def _wait_for_http(url: str, timeout_s: int, proc: subprocess.Popen, name: str = "Service") -> None:
     """
-    Poll `url` until HTTP 200 or timeout. Checks that `proc` is still alive.
+    Poll `url` until any HTTP response is received or timeout.
+    Checks that `proc` is still alive on each iteration.
     Raises SystemExit with a clear message on failure.
     """
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            sys.exit(f"[launcher] Backend process exited unexpectedly (rc={proc.returncode})")
+            sys.exit(f"[launcher] {name} process exited unexpectedly (rc={proc.returncode})")
         try:
-            with urlopen(url, timeout=2) as r:
-                if r.status == 200:
-                    return
+            with urlopen(url, timeout=2) as _:
+                return  # any response means the server is up
         except Exception:
             pass
         time.sleep(0.5)
-    sys.exit(f"[launcher] Backend did not become ready within {timeout_s}s ({url})")
-
-
-def _wait_for_port(host: str, port: int, timeout_s: int, proc: subprocess.Popen) -> None:
-    """
-    Poll TCP host:port until a connection succeeds or timeout. Checks `proc` is alive.
-    Raises SystemExit with a clear message on failure.
-    """
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        if proc.poll() is not None:
-            sys.exit(f"[launcher] Frontend process exited unexpectedly (rc={proc.returncode})")
-        try:
-            with socket.create_connection((host, port), timeout=1):
-                return
-        except (ConnectionRefusedError, OSError):
-            pass
-        time.sleep(0.5)
-    sys.exit(f"[launcher] Frontend did not become ready within {timeout_s}s ({host}:{port})")
+    sys.exit(f"[launcher] {name} did not become ready within {timeout_s}s ({url})")
 
 
 def _stop_process_group(proc: subprocess.Popen | None, name: str, timeout_s: int = 5) -> None:
@@ -206,13 +187,14 @@ def main() -> None:
         )
 
         _log("Waiting for backend to be ready…")
-        _wait_for_http(MANAGED_BACKEND_HEALTH_URL, BACKEND_READY_TIMEOUT_S, backend_proc)
+        _wait_for_http(MANAGED_BACKEND_HEALTH_URL, BACKEND_READY_TIMEOUT_S, backend_proc, name="Backend")
         _log("Backend ready.")
 
         _log(f"Starting frontend on port {MANAGED_FRONTEND_PORT}…")
         frontend_env = {
             **os.environ,
             "VITE_PORT": str(MANAGED_FRONTEND_PORT),
+            "VITE_HOST": "127.0.0.1",          # bind explicitly so readiness check hits the right address
             "VITE_BACKEND_PORT": str(MANAGED_BACKEND_PORT),
         }
         frontend_proc = subprocess.Popen(
@@ -223,7 +205,7 @@ def main() -> None:
         )
 
         _log("Waiting for frontend to be ready…")
-        _wait_for_port(MANAGED_FRONTEND_HOST, MANAGED_FRONTEND_PORT, FRONTEND_READY_TIMEOUT_S, frontend_proc)
+        _wait_for_http(MANAGED_FRONTEND_URL, FRONTEND_READY_TIMEOUT_S, frontend_proc, name="Frontend")
         _log("Frontend ready.")
 
         _launch_shell()

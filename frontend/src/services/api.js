@@ -6,7 +6,8 @@ async function request(path) {
   return res.json()
 }
 
-export const fetchEvents      = (limit = 100) => request(`/events/?limit=${limit}`)
-export const fetchHotspots    = ()            => request('/hotspots/')
-export const fetchPriorities  = ()            => request('/priorities/')
-export const fetchSystemStatus = ()           => request('/system/status')
+export const fetchEvents        = (limit = 100) => request(`/events/?limit=${limit}`)
+export const fetchHotspots      = ()            => request('/hotspots/')
+export const fetchHotspotDetail = (id)          => request(`/hotspots/${id}`)
+export const fetchPriorities    = ()            => request('/priorities/')
+export const fetchSystemStatus  = ()            => request('/system/status')

@@ -51,20 +51,7 @@ function badgeStyle(type) {
   return { color: c.color, borderColor: c.border }
 }
 
-function proximityEvents(hotspot, events) {
-  return events
-    .filter(e => {
-      const d = Math.sqrt(
-        Math.pow(e.latitude  - hotspot.centroid_lat, 2) +
-        Math.pow(e.longitude - hotspot.centroid_lon, 2)
-      )
-      return d < 2.5
-    })
-    .sort((a, b) => b.severity_score - a.severity_score)
-    .slice(0, 8)
-}
-
-function hotspotSummary(h, nearbyEvents) {
+function hotspotSummary(h, memberEvents) {
   const trend = h.trend_state === 'escalating' ? 'Escalating'
               : h.trend_state === 'declining'  ? 'Declining'
               : 'Ongoing'
@@ -72,9 +59,9 @@ function hotspotSummary(h, nearbyEvents) {
               : h.severity_score >= 0.5 ? 'moderate-severity'
               : 'low-severity'
   let text = `${trend} ${sev} cluster with ${h.event_count} event${h.event_count !== 1 ? 's' : ''}. Priority score ${Math.round(h.priority_score * 100)}.`
-  if (nearbyEvents.length > 0) {
+  if (memberEvents.length > 0) {
     const counts = {}
-    nearbyEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1 })
+    memberEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1 })
     const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
     text += ` Predominant activity type: ${dominant}.`
   }
@@ -155,8 +142,8 @@ function EventDetail({ event }) {
   )
 }
 
-function HotspotDetail({ hotspot, events }) {
-  const nearby = proximityEvents(hotspot, events)
+function HotspotDetail({ hotspot, memberEvents, loading }) {
+  const events = memberEvents ?? []
   return (
     <div className="detail-body">
       <div className="detail-title">{hotspot.name || 'Unnamed Hotspot'}</div>
@@ -205,33 +192,35 @@ function HotspotDetail({ hotspot, events }) {
       <div className="detail-section">
         <span className="detail-section__heading">Assessment</span>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-          {hotspotSummary(hotspot, nearby)}
+          {hotspotSummary(hotspot, events)}
         </p>
       </div>
 
       <div className="detail-section">
-        <span className="detail-section__heading">Nearby Events</span>
-        {nearby.length === 0
-          ? <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No events in range</span>
-          : nearby.map(e => (
-              <div key={e.id} className="hotspot-event-row">
-                <span className="hotspot-event-row__dot" style={{ backgroundColor: severityColor(e.severity_score) }} />
-                <span className="hotspot-event-row__type">{e.source_name === 'gdelt' ? 'GDELT' : e.event_type}</span>
-                <span className="hotspot-event-row__title">
-                  {e.source_name === 'gdelt'
-                    ? `${e.event_type} signal — ${e.city || e.country}`
-                    : e.title}
-                </span>
-                <span className="hotspot-event-row__time">{relativeTime(e.occurred_at)}</span>
-              </div>
-            ))
+        <span className="detail-section__heading">Member Events</span>
+        {loading
+          ? <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Loading events…</span>
+          : events.length === 0
+            ? <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No events assigned</span>
+            : events.slice(0, 8).map(e => (
+                <div key={e.id} className="hotspot-event-row">
+                  <span className="hotspot-event-row__dot" style={{ backgroundColor: severityColor(e.severity_score) }} />
+                  <span className="hotspot-event-row__type">{e.source_name === 'gdelt' ? 'GDELT' : e.event_type}</span>
+                  <span className="hotspot-event-row__title">
+                    {e.source_name === 'gdelt'
+                      ? `${e.event_type} signal — ${e.city || e.country}`
+                      : e.title}
+                  </span>
+                  <span className="hotspot-event-row__time">{relativeTime(e.occurred_at)}</span>
+                </div>
+              ))
         }
       </div>
     </div>
   )
 }
 
-export default function DetailPane({ item, onClose, events = [] }) {
+export default function DetailPane({ item, onClose, hotspotDetail, hotspotDetailLoading }) {
   const paneRef = useRef(null)
 
   // Reset scroll to top whenever the selected item changes
@@ -257,7 +246,11 @@ export default function DetailPane({ item, onClose, events = [] }) {
       </div>
       {item.type === 'event'
         ? <EventDetail event={item.data} />
-        : <HotspotDetail hotspot={item.data} events={events} />
+        : <HotspotDetail
+            hotspot={item.data}
+            memberEvents={hotspotDetail?.member_events}
+            loading={hotspotDetailLoading ?? false}
+          />
       }
     </div>
   )

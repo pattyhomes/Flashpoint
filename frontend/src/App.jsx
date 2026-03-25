@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
-import { fetchEvents, fetchHotspots, fetchPriorities, fetchSystemStatus } from './services/api.js'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { fetchEvents, fetchHotspots, fetchHotspotDetail, fetchPriorities, fetchSystemStatus } from './services/api.js'
 
 import Shell from './components/layout/Shell.jsx'
 import StatusBar from './components/layout/StatusBar.jsx'
@@ -18,6 +18,9 @@ export default function App() {
   const [systemStatus, setSystemStatus] = useState(null)
 
   const [selectedItem, setSelectedItem] = useState(null)
+  const [hotspotDetail, setHotspotDetail]               = useState(null)
+  const [hotspotDetailLoading, setHotspotDetailLoading] = useState(false)
+  const pendingHotspotId = useRef(null)
   const [activeTypes, setActiveTypes]   = useState(new Set())
   const [layersVisible, setLayersVisible] = useState({ events: true, hotspots: true, heatmap: false })
   const [minSeverity,   setMinSeverity]   = useState(0)
@@ -40,16 +43,45 @@ export default function App() {
 
   // Escape key to dismiss selection
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') setSelectedItem(null) }
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        pendingHotspotId.current = null
+        setSelectedItem(null)
+        setHotspotDetail(null)
+        setHotspotDetailLoading(false)
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Toggle-to-deselect
+  // Toggle-to-deselect; load hotspot detail from backend when a hotspot is selected
   function handleSelect(item) {
-    setSelectedItem(prev =>
-      prev?.type === item.type && prev?.data?.id === item.data.id ? null : item
-    )
+    const isSame = selectedItem?.type === item.type && selectedItem?.data?.id === item.data.id
+    const next = isSame ? null : item
+    setSelectedItem(next)
+
+    if (next?.type === 'hotspot') {
+      const id = next.data.id
+      pendingHotspotId.current = id
+      setHotspotDetail(null)
+      setHotspotDetailLoading(true)
+      fetchHotspotDetail(id)
+        .then(detail => {
+          if (pendingHotspotId.current === id) setHotspotDetail(detail)
+        })
+        .catch(err => {
+          if (pendingHotspotId.current === id)
+            console.error('[Flashpoint] hotspot detail error:', err)
+        })
+        .finally(() => {
+          if (pendingHotspotId.current === id) setHotspotDetailLoading(false)
+        })
+    } else {
+      pendingHotspotId.current = null
+      setHotspotDetail(null)
+      setHotspotDetailLoading(false)
+    }
   }
 
   // Toggle map layer visibility
@@ -100,7 +132,12 @@ export default function App() {
     if (selectedItem.type === 'event') {
       if (!filteredEvents.find(e => e.id === selectedItem.data.id)) setSelectedItem(null)
     } else {
-      if (!filteredHotspots.find(h => h.id === selectedItem.data.id)) setSelectedItem(null)
+      if (!filteredHotspots.find(h => h.id === selectedItem.data.id)) {
+        pendingHotspotId.current = null
+        setSelectedItem(null)
+        setHotspotDetail(null)
+        setHotspotDetailLoading(false)
+      }
     }
   }, [filteredEvents, filteredHotspots, selectedItem])
 
@@ -134,8 +171,14 @@ export default function App() {
           />
           <DetailPane
             item={selectedItem}
-            onClose={() => setSelectedItem(null)}
-            events={filteredEvents}
+            onClose={() => {
+              pendingHotspotId.current = null
+              setSelectedItem(null)
+              setHotspotDetail(null)
+              setHotspotDetailLoading(false)
+            }}
+            hotspotDetail={hotspotDetail}
+            hotspotDetailLoading={hotspotDetailLoading}
           />
         </>
       }

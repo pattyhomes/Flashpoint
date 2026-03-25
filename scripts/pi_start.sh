@@ -34,4 +34,7 @@ export FLASHPOINT_DEV_QUIT=0     # no dev quit shortcut on appliance display
 # Explicit 127.0.0.1 — avoids localhost→::1 (IPv6) resolution ambiguity on Linux
 export FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health
 
+# Backend serves the built frontend at root — same host:port as the API
+export FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000
+
 exec .venv/bin/python -m desktop.app.launcher

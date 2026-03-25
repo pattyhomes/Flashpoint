@@ -38,18 +38,21 @@ Chromium kiosk mode is superseded. Do not plan or implement Chromium-based deliv
 | Desktop runtime configuration (`desktop/app/config.py`, Pi seam flags) | done |
 | Pi backend service scaffolding (`deploy/pi/`, systemd user service) | done |
 | Pi desktop autostart scaffolding (`deploy/pi/`, XDG autostart) | done |
-| Pi end-to-end READY path | not done — frontend delivery on Pi still pending |
+| Pi frontend delivery (StaticFiles, `pi_start.sh` URL) | done — implemented, Mac-validated, not yet Pi hardware-validated |
+| Pi end-to-end READY path | not done — hardware validation pending |
 | Boot/autostart flow (Milestone B) — hardware validation | not started |
 | Native shell surfaces (Milestone C) | not started |
 
 ## Next Priority
 
 **Milestone B — Pi Runtime Integration (remaining work):**
-- Frontend delivery on Pi: build React app + FastAPI static file serving (or Nginx)
-  so the shell can load the UI from a Pi-local URL
-- Hardware validation: boot → READY flow tested on Pi hardware
+- Hardware validation: boot → READY flow tested on Pi hardware (frontend delivery is implemented)
 - Portrait/touch tuning, screen blanking control
 - Auto-login setup (manual raspi-config step, documented in `deploy/pi/README.md`)
+
+**Frontend delivery is solved:** Backend serves `frontend/dist/` via FastAPI `StaticFiles`.
+`pi_start.sh` sets `FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000`. Build step required
+on Pi before first boot — see `deploy/pi/README.md` Prerequisites.
 
 ---
 

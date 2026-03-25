@@ -1,7 +1,10 @@
+import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.database import engine, init_db
@@ -52,3 +55,14 @@ app.include_router(events.router, prefix="/api/v1")
 app.include_router(hotspots.router, prefix="/api/v1")
 app.include_router(priorities.router, prefix="/api/v1")
 app.include_router(system.router, prefix="/api/v1")
+
+_logger = logging.getLogger(__name__)
+_FRONTEND_DIST = Path(__file__).parent.parent.parent / "frontend" / "dist"
+
+if _FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="static")
+else:
+    _logger.warning(
+        "frontend/dist/ not found — static frontend not served. "
+        "Run `cd frontend && npm run build` to enable."
+    )

@@ -53,15 +53,37 @@ Before running the install script, ensure:
    cd /home/pi/flashpoint
    python3 -m venv .venv
    source .venv/bin/activate
-   pip install -r backend/requirements.txt
-   pip install -r desktop/requirements.txt
+   pip install -e .                      # backend + aiofiles (reads pyproject.toml)
+   pip install -r desktop/requirements.txt  # PySide6
    ```
-4. **`.env` file present** at repo root:
+4. **Frontend built** — the backend serves `frontend/dist/` as static files.
+   Build it on the Pi (requires Node.js) or build on your Mac and rsync it over.
+
+   **Option A — Build on Pi:**
+   ```bash
+   # Install Node.js if not already present (one-time):
+   sudo apt install -y nodejs npm
+
+   cd /home/pi/flashpoint/frontend && npm install && npm run build
+   ```
+
+   **Option B — Build on Mac, rsync to Pi:**
+   ```bash
+   # On your Mac, from the repo root:
+   cd frontend && npm run build
+   rsync -a dist/ pi@<pi-host>:/home/pi/flashpoint/frontend/dist/
+   ```
+
+   The backend logs a warning at startup if `frontend/dist/` is missing and continues
+   to serve the API — the shell will show "Could not load the frontend" until the build
+   is present and the backend is restarted.
+
+5. **`.env` file present** at repo root:
    ```bash
    cp .env.example .env
    # Edit .env: set MOCK_DATA_ENABLED=true and INGEST_SOURCE=mock for initial testing
    ```
-5. **Auto-login configured** (see below)
+6. **Auto-login configured** (see below)
 
 ### Configuring Auto-Login
 
@@ -110,6 +132,9 @@ systemctl --user status flashpoint-backend
 # Backend health endpoint
 curl http://127.0.0.1:8000/api/v1/health
 
+# Frontend static serving (returns HTML if frontend/dist/ was built)
+curl -s http://127.0.0.1:8000/ | head -4
+
 # View backend logs
 journalctl --user -u flashpoint-backend -f
 
@@ -121,32 +146,22 @@ bash scripts/pi_start.sh
 
 ## Known Gaps
 
-### Frontend delivery on Pi is not yet implemented
+### Frontend delivery — resolved at code level, hardware not yet validated
 
-The Flashpoint shell loads the React/Vite UI from `FLASHPOINT_FRONTEND_URL`. On Pi with
-only the backend service running, nothing serves the frontend. The shell will:
+The backend now serves `frontend/dist/` as static files via FastAPI `StaticFiles`. The
+shell's `FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000` (set by `pi_start.sh`) points
+at the backend root. This path is implemented and Mac-validated.
 
-1. Connect to the backend successfully (health poll passes)
-2. Attempt to load the frontend from its default URL
-3. Show "Could not load the frontend" + Retry button
-
-**Interim path for Pi dev/testing:** Use the full orchestrated launcher instead of the
-Pi-managed path. This starts the Vite dev server alongside the backend:
-
-```bash
-# Full orchestrated mode — starts backend (8001), Vite dev server (5178), and shell:
-bash scripts/run.sh
-```
-
-**Resolution path:** Once the React app is built (`npm run build`) and FastAPI is
-configured to serve `frontend/dist/`, the shell will load cleanly. This is a future
-milestone (native shell surfaces / FastAPI static serving).
+**Remaining requirement:** `frontend/dist/` must be built before the backend starts.
+See the "Build the frontend" step in Prerequisites above. If the build is missing, the
+backend warns at startup and the shell shows "Could not load the frontend" — the existing
+graceful degradation path.
 
 ### Hardware validation not yet done
 
-This scaffolding has been reviewed for correctness on Mac (syntax, path consistency,
-config integration) but has not been tested on Pi hardware. The boot → READY flow is
-scaffolded but not verified end-to-end.
+This scaffolding and the frontend delivery path have been reviewed for correctness on Mac
+but have not been tested on Pi hardware. The boot → READY flow is implemented but not
+verified end-to-end on physical hardware.
 
 ---
 

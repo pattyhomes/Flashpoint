@@ -40,21 +40,7 @@ import time
 from pathlib import Path
 from urllib.request import urlopen
 
-# ---------------------------------------------------------------------------
-# Managed-port constants (orchestrated path only)
-#
-# Standalone dev paths (dev_backend.sh, dev_desktop.sh) keep their defaults:
-#   backend → 8000, frontend → 5173
-# ---------------------------------------------------------------------------
-
-MANAGED_BACKEND_PORT = 8001
-MANAGED_FRONTEND_PORT = 5178
-
-MANAGED_BACKEND_HEALTH_URL = f"http://127.0.0.1:{MANAGED_BACKEND_PORT}/api/v1/health"
-MANAGED_FRONTEND_URL = f"http://127.0.0.1:{MANAGED_FRONTEND_PORT}"
-
-BACKEND_READY_TIMEOUT_S = 30
-FRONTEND_READY_TIMEOUT_S = 30
+from desktop.app import config
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -128,12 +114,12 @@ def _stop_process_group(proc: subprocess.Popen | None, name: str, timeout_s: int
 def main() -> None:
     repo_root = Path(__file__).resolve().parent.parent.parent
 
-    managed = os.environ.get("FLASHPOINT_MANAGED", "0") == "1"
+    managed = config.MANAGED
 
     # Inject managed URLs into the environment so window.py picks them up
     # before it is imported by desktop.app.main.
-    os.environ["FLASHPOINT_BACKEND_HEALTH_URL"] = MANAGED_BACKEND_HEALTH_URL
-    os.environ["FLASHPOINT_FRONTEND_URL"] = MANAGED_FRONTEND_URL
+    os.environ["FLASHPOINT_BACKEND_HEALTH_URL"] = config.MANAGED_BACKEND_HEALTH_URL
+    os.environ["FLASHPOINT_FRONTEND_URL"] = config.MANAGED_FRONTEND_URL
 
     if managed:
         # TRANSITIONAL: Pi path — services managed externally (systemd, autostart).
@@ -146,7 +132,7 @@ def main() -> None:
     # Preflight checks
     # ------------------------------------------------------------------
 
-    for port in (MANAGED_BACKEND_PORT, MANAGED_FRONTEND_PORT):
+    for port in (config.MANAGED_BACKEND_PORT, config.MANAGED_FRONTEND_PORT):
         if not _check_port_free(port):
             sys.exit(
                 f"[launcher] Port {port} is already in use. "
@@ -174,13 +160,13 @@ def main() -> None:
     frontend_proc: subprocess.Popen | None = None
 
     try:
-        _log(f"Starting backend on port {MANAGED_BACKEND_PORT}…")
+        _log(f"Starting backend on port {config.MANAGED_BACKEND_PORT}…")
         backend_proc = subprocess.Popen(
             [
                 str(venv_uvicorn),
                 "app.main:app",
                 "--host", "127.0.0.1",
-                "--port", str(MANAGED_BACKEND_PORT),
+                "--port", str(config.MANAGED_BACKEND_PORT),
                 "--reload",
             ],
             cwd=str(repo_root / "backend"),
@@ -188,15 +174,15 @@ def main() -> None:
         )
 
         _log("Waiting for backend to be ready…")
-        _wait_for_http(MANAGED_BACKEND_HEALTH_URL, BACKEND_READY_TIMEOUT_S, backend_proc, name="Backend")
+        _wait_for_http(config.MANAGED_BACKEND_HEALTH_URL, config.BACKEND_READY_TIMEOUT_S, backend_proc, name="Backend")
         _log("Backend ready.")
 
-        _log(f"Starting frontend on port {MANAGED_FRONTEND_PORT}…")
+        _log(f"Starting frontend on port {config.MANAGED_FRONTEND_PORT}…")
         frontend_env = {
             **os.environ,
-            "VITE_PORT": str(MANAGED_FRONTEND_PORT),
+            "VITE_PORT": str(config.MANAGED_FRONTEND_PORT),
             "VITE_HOST": "127.0.0.1",          # bind explicitly so readiness check hits the right address
-            "VITE_BACKEND_PORT": str(MANAGED_BACKEND_PORT),
+            "VITE_BACKEND_PORT": str(config.MANAGED_BACKEND_PORT),
         }
         frontend_proc = subprocess.Popen(
             ["npm", "run", "dev"],
@@ -206,7 +192,7 @@ def main() -> None:
         )
 
         _log("Waiting for frontend to be ready…")
-        _wait_for_http(MANAGED_FRONTEND_URL, FRONTEND_READY_TIMEOUT_S, frontend_proc, name="Frontend")
+        _wait_for_http(config.MANAGED_FRONTEND_URL, config.FRONTEND_READY_TIMEOUT_S, frontend_proc, name="Frontend")
         _log("Frontend ready.")
 
         _launch_shell()

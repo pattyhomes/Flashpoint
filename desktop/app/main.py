@@ -18,6 +18,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from desktop.app import config
 from desktop.app.window import MainWindow
 
 
@@ -25,7 +26,12 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Flashpoint")
     window = MainWindow()
-    window.show()
+    # PI_SEAM: FLASHPOINT_FULLSCREEN=1 → showFullScreen() for Pi production.
+    # Default is windowed (current Mac dev behavior).
+    if config.FULLSCREEN:
+        window.showFullScreen()
+    else:
+        window.show()
     sys.exit(app.exec())
 
 

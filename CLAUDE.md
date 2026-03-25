@@ -117,8 +117,8 @@ cd frontend && npm run lint
 
 ### Desktop shell (`desktop/`)
 
+- **Config:** `desktop/app/config.py` — single source of truth for all desktop runtime constants (ports, timeouts, health poll settings, Pi seam flags). Both `launcher.py` and `window.py` import from here. Pi seam env vars: `FLASHPOINT_FULLSCREEN`, `FLASHPOINT_DEV_QUIT`, `FLASHPOINT_MANAGED`, `FLASHPOINT_PORTRAIT`.
 - **Launcher:** `desktop/app/launcher.py` — orchestrates backend + frontend subprocesses, waits for readiness, then calls `desktop.app.main.main()` inline. Sets `FLASHPOINT_BACKEND_HEALTH_URL` and `FLASHPOINT_FRONTEND_URL` env vars before importing the shell. Managed ports: backend 8001, frontend 5178. `FLASHPOINT_MANAGED=1` skips subprocess management (Pi path).
-- **Entry:** `desktop/app/main.py` — launched as `-m desktop.app.main` to avoid import collision with backend's `app/` package
-- **Window:** `desktop/app/window.py` — `_HealthPoller` (QThread, polls health endpoint), `_OverlayWidget` (native connecting/unavailable state), `MainWindow` (state machine: CONNECTING → LOADING_WEBVIEW → READY | UNAVAILABLE)
-- **Config constants** (top of `window.py`): `BACKEND_HEALTH_URL` and `FRONTEND_URL` read from env with fallback to standalone defaults (8000/5173). `HEALTH_POLL_INTERVAL_MS`, `HEALTH_POLL_TIMEOUT_S`, `HEALTH_MAX_FAILURES` hardcoded.
+- **Entry:** `desktop/app/main.py` — launched as `-m desktop.app.main` to avoid import collision with backend's `app/` package. Uses `config.FULLSCREEN` to call `showFullScreen()` vs `show()`.
+- **Window:** `desktop/app/window.py` — `_HealthPoller` (QThread, polls health endpoint), `_OverlayWidget` (native connecting/unavailable state), `MainWindow` (state machine: CONNECTING → LOADING_WEBVIEW → READY | UNAVAILABLE). `BACKEND_HEALTH_URL` and `FRONTEND_URL` read from env vars (injected by launcher) with `config.STANDALONE_*` as fallbacks.
 - **Install PySide6:** `pip install -r desktop/requirements.txt` (into existing `.venv`)

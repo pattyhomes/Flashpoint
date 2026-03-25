@@ -19,6 +19,7 @@ See desktop/README.md for the full transitional-architecture rationale.
 import os
 from urllib.request import urlopen
 
+from desktop.app import config
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -38,24 +39,24 @@ from PySide6.QtWidgets import (
 # URLs are read from environment variables so the launcher can inject managed
 # ports (8001/5178) for the orchestrated path without changing this file.
 # Standalone dev (dev_desktop.sh) sets no env vars → falls back to defaults.
+# Fallback strings come from config.STANDALONE_* so they have one definition.
 #
 # FRONTEND_URL in dev:  Vite dev server proxies /api → backend.
 # FRONTEND_URL on Pi:   Will point to the backend serving the built frontend
 #                       once static-file serving is added to FastAPI
 #                       (Milestone B/C work).
+#
+# All other constants (poll settings, Pi seams) come from desktop.app.config.
 # ---------------------------------------------------------------------------
 
 BACKEND_HEALTH_URL = os.environ.get(
     "FLASHPOINT_BACKEND_HEALTH_URL",
-    "http://localhost:8000/api/v1/health",   # standalone dev default
+    config.STANDALONE_BACKEND_HEALTH_URL,
 )
 FRONTEND_URL = os.environ.get(
     "FLASHPOINT_FRONTEND_URL",
-    "http://localhost:5173",                 # standalone dev default
+    config.STANDALONE_FRONTEND_URL,
 )
-HEALTH_POLL_INTERVAL_MS = 2_000   # ms between poll attempts
-HEALTH_POLL_TIMEOUT_S   = 3       # per-request HTTP timeout
-HEALTH_MAX_FAILURES     = 10      # give up after this many consecutive failures
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +86,7 @@ class _HealthPoller(QThread):
         failures = 0
         while not self._stop_flag:
             try:
-                with urlopen(BACKEND_HEALTH_URL, timeout=HEALTH_POLL_TIMEOUT_S) as resp:
+                with urlopen(BACKEND_HEALTH_URL, timeout=config.HEALTH_POLL_TIMEOUT_S) as resp:
                     if resp.status == 200:
                         self.ready.emit()
                         return
@@ -94,12 +95,12 @@ class _HealthPoller(QThread):
             except Exception:
                 failures += 1
 
-            if failures >= HEALTH_MAX_FAILURES:
+            if failures >= config.HEALTH_MAX_FAILURES:
                 self.unavailable.emit()
                 return
 
             # Sleep in 100ms steps so the stop flag is checked frequently
-            for _ in range(HEALTH_POLL_INTERVAL_MS // 100):
+            for _ in range(config.HEALTH_POLL_INTERVAL_MS // 100):
                 if self._stop_flag:
                     return
                 self.msleep(100)
@@ -233,10 +234,14 @@ class MainWindow(QMainWindow):
         self._webview.loadFinished.connect(self._on_load_finished)
         self._stack.addWidget(self._webview)
 
-        # Dev convenience: Ctrl+Q exits.
-        # TRANSITIONAL: remove or guard behind a dev flag for Pi production.
-        quit_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
-        quit_shortcut.activated.connect(QApplication.quit)
+        # Dev quit shortcut: Ctrl+Q (Command+Q on macOS).
+        # PI_SEAM: gated by config.DEV_QUIT_ENABLED (FLASHPOINT_DEV_QUIT env var).
+        # Set FLASHPOINT_DEV_QUIT=0 to skip registering this shortcut on Pi.
+        # NOTE: only this explicit QShortcut is gated; platform-level quit paths
+        # (e.g. macOS application menu) are not affected by this flag.
+        if config.DEV_QUIT_ENABLED:
+            quit_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+            quit_shortcut.activated.connect(QApplication.quit)
 
         self._poller: _HealthPoller | None = None
 

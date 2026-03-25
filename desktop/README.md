@@ -114,22 +114,39 @@ bash scripts/dev_desktop.sh
 
 ## Config
 
-Shell runtime constants are at the top of `desktop/app/window.py`:
+All desktop runtime constants live in **`desktop/app/config.py`** — the single source of truth for both the launcher and the shell. Neither `launcher.py` nor `window.py` define their own constants; they import from `config`.
 
 ```python
-BACKEND_HEALTH_URL  # reads FLASHPOINT_BACKEND_HEALTH_URL env var; fallback: localhost:8000
-FRONTEND_URL        # reads FLASHPOINT_FRONTEND_URL env var; fallback: localhost:5173
+# Standalone URL defaults (fallbacks when no env vars are set)
+STANDALONE_BACKEND_HEALTH_URL = "http://localhost:8000/api/v1/health"
+STANDALONE_FRONTEND_URL       = "http://localhost:5173"
+
+# Managed ports (orchestrated path)
+MANAGED_BACKEND_PORT  = 8001
+MANAGED_FRONTEND_PORT = 5178
+
+# Launcher readiness timeouts
+BACKEND_READY_TIMEOUT_S  = 30
+FRONTEND_READY_TIMEOUT_S = 30
+
+# Shell health poller
 HEALTH_POLL_INTERVAL_MS = 2_000
 HEALTH_POLL_TIMEOUT_S   = 3
 HEALTH_MAX_FAILURES     = 10
 ```
 
-Launcher managed-port constants are at the top of `desktop/app/launcher.py`:
+**URL exception:** `BACKEND_HEALTH_URL` and `FRONTEND_URL` (as runtime-resolved values) are still read in `window.py` at import time via `os.environ.get(...)`, because the launcher injects those env vars *after* `config.py` is first imported. The `STANDALONE_*` strings in `config.py` serve as the fallback values.
 
-```python
-MANAGED_BACKEND_PORT  = 8001
-MANAGED_FRONTEND_PORT = 5178
-```
+### Pi seam env vars
+
+| Env var | Default | What it does |
+|---|---|---|
+| `FLASHPOINT_FULLSCREEN` | `0` | `1` → `showFullScreen()` for Pi production |
+| `FLASHPOINT_DEV_QUIT` | `1` | `0` → custom `QShortcut` (Ctrl+Q / Command+Q) not registered |
+| `FLASHPOINT_MANAGED` | `0` | `1` → launcher skips subprocess management (services external) |
+| `FLASHPOINT_PORTRAIT` | `0` | **Future use only** — not yet wired to any geometry or orientation behavior |
+
+All seam vars are documented in `.env.example` with the `FLASHPOINT_*` prefix.
 
 ---
 

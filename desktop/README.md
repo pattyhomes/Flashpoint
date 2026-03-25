@@ -74,7 +74,13 @@ The shell will show "Connecting…" until the backend responds to
 | Starting / backend not yet ready | Dark screen — "FLASHPOINT / Connecting…" |
 | Backend not responding after ~20s | Dark screen — status message + "Retry" button |
 | Backend ready, frontend loading | Dark screen — still "Connecting…" (avoids blank flash) |
+| Frontend URL unreachable / load error | Dark screen — "Could not load the frontend" + "Retry" button |
 | Operational | React UI fullscreen, no chrome |
+
+The shell only reveals the webview after a successful frontend load (`loadFinished(True)`).
+A failed frontend load remains a native overlay-owned state — the operator always sees a
+shell-controlled surface, never a blank webview or browser error page. Retry re-initiates
+the full sequence: backend health poll → frontend load.
 
 ---
 

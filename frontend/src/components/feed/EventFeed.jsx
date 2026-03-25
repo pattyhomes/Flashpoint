@@ -42,7 +42,7 @@ function EventRow({ event, isSelected, onSelect }) {
   )
 }
 
-export default function EventFeed({ events, selectedItem, onSelect }) {
+export default function EventFeed({ events, loadedCount = 0, total = 0, hasMore = false, onLoadMore, loadingMore = false, selectedItem, onSelect }) {
   const listRef = useRef(null)
 
   // Scroll selected row into view when selection changes externally (map/priorities)
@@ -52,11 +52,16 @@ export default function EventFeed({ events, selectedItem, onSelect }) {
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [selectedItem])
 
+  // Primary count: loadedCount / total (both from backend universe)
+  // Secondary: filtered visible count when filters reduce the visible set
+  const primaryCount = hasMore ? `${loadedCount} / ${total}` : `${total}`
+  const visibleLabel = events.length < loadedCount ? ` · ${events.length} visible` : ''
+
   return (
     <div className="event-feed">
       <div className="panel-header">
         <span className="panel-header__title">Event Feed</span>
-        <span className="panel-header__count">{events.length}</span>
+        <span className="panel-header__count">{primaryCount}{visibleLabel}</span>
       </div>
       <div className="event-feed__list" ref={listRef}>
         {events.map(event => (
@@ -67,6 +72,15 @@ export default function EventFeed({ events, selectedItem, onSelect }) {
             onSelect={() => onSelect({ type: 'event', data: event })}
           />
         ))}
+        {hasMore && (
+          <button
+            className="event-feed__load-more"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Loading…' : `Load more · ${total - loadedCount} remaining`}
+          </button>
+        )}
       </div>
     </div>
   )

@@ -77,6 +77,14 @@ class HotspotOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EventPage(BaseModel):
+    items:    list[EventOut]
+    total:    int        # total active events in DB (same base query as items)
+    limit:    int
+    offset:   int
+    has_more: bool       # (offset + len(items)) < total
+
+
 class HotspotDetailOut(HotspotOut):
     member_events: list[EventOut] = []
 

@@ -11,6 +11,10 @@ import EventFeed from './components/feed/EventFeed.jsx'
 
 export default function App() {
   const [events, setEvents]       = useState([])
+  const [eventTotal,        setEventTotal]        = useState(0)
+  const [eventsOffset,      setEventsOffset]      = useState(0)
+  const [eventsHasMore,     setEventsHasMore]     = useState(false)
+  const [eventsLoadingMore, setEventsLoadingMore] = useState(false)
   const [hotspots, setHotspots]   = useState([])
   const [priorities, setPriorities] = useState([])
   const [loading, setLoading]         = useState(true)
@@ -29,9 +33,12 @@ export default function App() {
 
   // Fetch all data once on mount
   useEffect(() => {
-    Promise.all([fetchEvents(), fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
-      .then(([ev, hs, pr, status]) => {
-        setEvents(ev)
+    Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
+      .then(([evPage, hs, pr, status]) => {
+        setEvents(evPage.items)
+        setEventTotal(evPage.total)
+        setEventsOffset(evPage.items.length)
+        setEventsHasMore(evPage.has_more)
         setHotspots(hs)
         setPriorities(pr)
         setSystemStatus(status)
@@ -40,6 +47,24 @@ export default function App() {
       .catch(err => console.error('[Flashpoint] fetch error:', err))
       .finally(() => setLoading(false))
   }, [])
+
+  // Load the next page of events and merge by id to prevent duplicates
+  function handleLoadMore() {
+    setEventsLoadingMore(true)
+    fetchEvents(500, eventsOffset)
+      .then(evPage => {
+        setEvents(prev => {
+          const seen = new Set(prev.map(e => e.id))
+          const fresh = evPage.items.filter(e => !seen.has(e.id))
+          return [...prev, ...fresh]
+        })
+        setEventsOffset(prev => prev + evPage.items.length)
+        setEventsHasMore(evPage.has_more)
+        setEventTotal(evPage.total)
+      })
+      .catch(err => console.error('[Flashpoint] load more error:', err))
+      .finally(() => setEventsLoadingMore(false))
+  }
 
   // Escape key to dismiss selection
   useEffect(() => {
@@ -185,6 +210,11 @@ export default function App() {
       bottom={
         <EventFeed
           events={filteredEvents}
+          loadedCount={events.length}
+          total={eventTotal}
+          hasMore={eventsHasMore}
+          onLoadMore={handleLoadMore}
+          loadingMore={eventsLoadingMore}
           selectedItem={selectedItem}
           onSelect={handleSelect}
         />

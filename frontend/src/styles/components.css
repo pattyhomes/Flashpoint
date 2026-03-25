@@ -503,6 +503,32 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* ── Event Feed Load More ── */
+.event-feed__load-more {
+  display: block;
+  width: 100%;
+  padding: var(--sp-md);
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--surface-border);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-align: center;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+
+.event-feed__load-more:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.event-feed__load-more:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ── Event Row ── */
 .event-row {
   display: grid;

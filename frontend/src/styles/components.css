@@ -133,6 +133,14 @@
   flex-shrink: 0;
 }
 
+.filter-chip__count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
 .filter-section__placeholder {
   font-size: var(--text-sm);
   color: var(--text-muted);

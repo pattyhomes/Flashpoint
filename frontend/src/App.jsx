@@ -151,6 +151,20 @@ export default function App() {
     [priorities, activeTrends]
   )
 
+  // Per-type counts from loaded events, applying all quality gates except the type filter.
+  // Gives the operator an honest "activation count" — what you'd see if you toggled that type.
+  const eventTypeCounts = useMemo(() => {
+    const counts = {}
+    for (const e of events) {
+      if (e.severity_score   < minSeverity)                            continue
+      if (e.confidence_score < minConfidence)                          continue
+      if (activeTrends.size  > 0 && !activeTrends.has(e.trend_state)) continue
+      if (e.source_name === 'gdelt' && e.source_count < 2)             continue
+      counts[e.event_type] = (counts[e.event_type] || 0) + 1
+    }
+    return counts
+  }, [events, minSeverity, minConfidence, activeTrends])
+
   // Clear selection when the selected item is filtered out
   useEffect(() => {
     if (!selectedItem) return
@@ -176,6 +190,7 @@ export default function App() {
           minSeverity={minSeverity}     onSetSeverity={setMinSeverity}
           minConfidence={minConfidence} onSetConfidence={setMinConfidence}
           activeTrends={activeTrends}   onToggleTrend={handleToggleTrend}
+          eventTypeCounts={eventTypeCounts}
         />
       }
       map={

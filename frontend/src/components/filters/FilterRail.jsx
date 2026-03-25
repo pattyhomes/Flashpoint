@@ -36,6 +36,7 @@ export default function FilterRail({
   minSeverity, onSetSeverity,
   minConfidence, onSetConfidence,
   activeTrends, onToggleTrend,
+  eventTypeCounts = {},
 }) {
   const allActive = activeTypes.size === 0
 
@@ -58,6 +59,7 @@ export default function FilterRail({
             >
               <span className="filter-chip__dot" style={{ backgroundColor: t.color }} />
               {t.label}
+              <span className="filter-chip__count">{eventTypeCounts[t.key] ?? 0}</span>
             </button>
           ))}
         </div>

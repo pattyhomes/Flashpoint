@@ -116,17 +116,19 @@ def main() -> None:
 
     managed = config.MANAGED
 
-    # Inject managed URLs into the environment so window.py picks them up
-    # before it is imported by desktop.app.main.
-    os.environ["FLASHPOINT_BACKEND_HEALTH_URL"] = config.MANAGED_BACKEND_HEALTH_URL
-    os.environ["FLASHPOINT_FRONTEND_URL"] = config.MANAGED_FRONTEND_URL
-
     if managed:
         # TRANSITIONAL: Pi path — services managed externally (systemd, autostart).
-        # Skip subprocess management; shell health poller is the readiness gate.
+        # Do not inject managed-port URLs: the Pi backend service runs on port 8000
+        # (not 8001). window.py reads FLASHPOINT_BACKEND_HEALTH_URL from env —
+        # pi_start.sh sets it to http://127.0.0.1:8000/api/v1/health (explicit IPv4).
         _log("FLASHPOINT_MANAGED=1 — skipping subprocess management.")
         _launch_shell()
         return
+
+    # Unmanaged path: inject managed-port URLs (8001/5178) so the shell connects
+    # to the subprocesses started below. Must happen before window.py is imported.
+    os.environ["FLASHPOINT_BACKEND_HEALTH_URL"] = config.MANAGED_BACKEND_HEALTH_URL
+    os.environ["FLASHPOINT_FRONTEND_URL"] = config.MANAGED_FRONTEND_URL
 
     # ------------------------------------------------------------------
     # Preflight checks

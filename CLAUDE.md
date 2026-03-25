@@ -35,16 +35,21 @@ Chromium kiosk mode is superseded. Do not plan or implement Chromium-based deliv
 | Mock ingestion + IngestRun persistence | done |
 | `desktop/` PySide6 shell (Milestone A) | done |
 | Desktop runtime orchestration (launcher, managed ports) | done |
-| Boot/autostart flow (Milestone B) | not started |
+| Desktop runtime configuration (`desktop/app/config.py`, Pi seam flags) | done |
+| Pi backend service scaffolding (`deploy/pi/`, systemd user service) | done |
+| Pi desktop autostart scaffolding (`deploy/pi/`, XDG autostart) | done |
+| Pi end-to-end READY path | not done — frontend delivery on Pi still pending |
+| Boot/autostart flow (Milestone B) — hardware validation | not started |
 | Native shell surfaces (Milestone C) | not started |
 
 ## Next Priority
 
-**Milestone B — Pi Runtime Integration:**
-- Pi autostart (`~/.config/labwc/autostart` or equivalent)
-- Systemd backend service
-- Boot → operational flow tested on hardware
+**Milestone B — Pi Runtime Integration (remaining work):**
+- Frontend delivery on Pi: build React app + FastAPI static file serving (or Nginx)
+  so the shell can load the UI from a Pi-local URL
+- Hardware validation: boot → READY flow tested on Pi hardware
 - Portrait/touch tuning, screen blanking control
+- Auto-login setup (manual raspi-config step, documented in `deploy/pi/README.md`)
 
 ---
 

@@ -150,30 +150,30 @@ All seam vars are documented in `.env.example` with the `FLASHPOINT_*` prefix.
 
 ---
 
-## Pi Future-Readiness
+## Pi Runtime
 
-### FLASHPOINT_MANAGED=1
+Pi autostart and service scaffolding is in `deploy/pi/`. See **`deploy/pi/README.md`**
+for the full setup guide, boot flow, and known gaps.
 
-Set this env var to skip subprocess management in the launcher and go straight to
-the shell. The shell's health poller is the readiness gate. Use this when services
-are managed externally (systemd, autostart).
+**Quick summary:**
+- Backend runs as a systemd user service (`flashpoint-backend.service`)
+- Shell autostarts via XDG autostart (`flashpoint.desktop` → `scripts/pi_start.sh`)
+- `scripts/pi_start.sh` sets `FLASHPOINT_MANAGED=1`, `FLASHPOINT_FULLSCREEN=1`,
+  `FLASHPOINT_DEV_QUIT=0`, and `FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health`
+- Install with: `bash deploy/pi/install.sh`
 
-Pi autostart entry (`~/.config/labwc/autostart`) can be as simple as:
+**Known gap:** Frontend delivery on Pi is not yet solved. The shell will connect to the
+backend but fail to load the React UI until static frontend serving is added. Interim
+option: use `scripts/run.sh` (orchestrated mode) for Pi dev/testing.
 
-```
-FLASHPOINT_MANAGED=1 bash /path/to/repo/scripts/run.sh &
-```
+### Remaining milestones
 
-### Future milestone table
-
-| Future milestone | What to add |
+| Milestone | What to add |
 |---|---|
-| Pi autostart | `~/.config/labwc/autostart` or systemd user service with `FLASHPOINT_MANAGED=1` |
-| Backend service | `systemd` unit managing `uvicorn`; shell waits via health poll (already wired) |
-| Portrait / touch | Window geometry tuning, touch-friendly Qt event handling |
-| Frontend URL | Change `FLASHPOINT_FRONTEND_URL` → `http://localhost:8000` once FastAPI serves built frontend |
-| Remove quit shortcut | Guard `Ctrl+Q` / `Command+Q` behind a `DEV_MODE` env var |
-| Native surfaces | Replace overlay widget → richer native startup screen |
+| Frontend delivery for Pi | Build React app + FastAPI static serving or nginx; set `FLASHPOINT_FRONTEND_URL` |
+| Hardware validation | Boot → READY flow tested on Pi hardware |
+| Portrait / touch | Wire `FLASHPOINT_PORTRAIT=1` to window geometry; touch-friendly Qt event handling |
+| Native surfaces | Replace overlay widget → richer native startup screen (Milestone C) |
 
 ---
 

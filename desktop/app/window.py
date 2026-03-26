@@ -62,6 +62,10 @@ FRONTEND_URL = os.environ.get(
 )
 
 
+def _log(msg: str) -> None:
+    print(f"[shell] {msg}", flush=True)
+
+
 # ---------------------------------------------------------------------------
 # Background health poller
 # ---------------------------------------------------------------------------
@@ -234,7 +238,11 @@ class MainWindow(QMainWindow):
         # Page 1 — embedded web UI
         self._webview = QWebEngineView()
         self._webview.setContextMenuPolicy(Qt.NoContextMenu)
+        self._webview.loadStarted.connect(lambda: _log(f"Loading {FRONTEND_URL}…"))
         self._webview.loadFinished.connect(self._on_load_finished)
+        self._webview.page().renderProcessTerminated.connect(
+            self._on_render_terminated
+        )
         self._stack.addWidget(self._webview)
 
         # Dev quit shortcut: Ctrl+Q (Command+Q on macOS).
@@ -265,17 +273,27 @@ class MainWindow(QMainWindow):
 
     def _on_backend_ready(self) -> None:
         """Backend health passed → start loading the web UI."""
+        _log(f"Backend ready — loading frontend: {FRONTEND_URL}")
         # Keep the overlay visible while the webview loads (avoids flash of blank)
         self._overlay.set_connecting()
         self._webview.setUrl(QUrl(FRONTEND_URL))
 
     def _on_load_finished(self, ok: bool) -> None:
         """Webview reported load complete."""
+        url = self._webview.url().toString()
         if ok:
+            _log(f"Frontend loaded: {url}")
             self._stack.setCurrentIndex(1)  # Hand off to the web UI
         else:
+            _log(f"Frontend load FAILED: {url}")
             self._overlay.set_unavailable("Could not load the frontend")
             self._stack.setCurrentIndex(0)
+
+    def _on_render_terminated(self, status, exit_code) -> None:
+        """Chromium renderer process crashed or was killed before load completed."""
+        _log(f"RENDERER TERMINATED: status={status}, exit_code={exit_code}")
+        self._overlay.set_unavailable("Could not load the frontend")
+        self._stack.setCurrentIndex(0)
 
     def _on_backend_unavailable(self) -> None:
         """Health poller exhausted its retry budget."""

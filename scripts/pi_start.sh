@@ -37,4 +37,12 @@ export FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health
 # Backend serves the built frontend at root — same host:port as the API
 export FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000
 
+# QtWebEngine Chromium subprocess flags — required for system Qt5 on Pi.
+# Without --disable-gpu, the Chromium GPU process fails to initialize on
+# VideoCore VII, causing loadFinished(false) even though the backend serves
+# the page correctly. QTWEBENGINE_CHROMIUM_FLAGS is the canonical mechanism —
+# flags in sys.argv do NOT reach the internal Chromium subprocess.
+export QTWEBENGINE_DISABLE_SANDBOX=1
+export QTWEBENGINE_CHROMIUM_FLAGS="--no-sandbox --disable-gpu"
+
 exec .venv/bin/python -m desktop.app.launcher

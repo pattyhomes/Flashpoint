@@ -65,6 +65,31 @@ _STATE_NAME_TO_ABBREV: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
+# US state centroids (approximate) — fallback when ER omits lat/lon
+# ---------------------------------------------------------------------------
+
+_STATE_CENTROIDS: dict[str, tuple[float, float]] = {
+    "AL": (32.8, -86.8), "AK": (64.2, -153.4), "AZ": (34.3, -111.9),
+    "AR": (34.9, -92.4), "CA": (36.8, -119.4), "CO": (39.0, -105.5),
+    "CT": (41.6, -72.7), "DE": (38.9, -75.5), "FL": (28.6, -82.5),
+    "GA": (32.7, -83.4), "HI": (20.3, -156.3), "ID": (44.4, -114.6),
+    "IL": (40.0, -89.2), "IN": (40.3, -86.1), "IA": (42.0, -93.5),
+    "KS": (38.5, -98.4), "KY": (37.5, -85.3), "LA": (31.1, -91.8),
+    "ME": (45.4, -69.0), "MD": (39.0, -76.8), "MA": (42.3, -71.8),
+    "MI": (44.3, -85.6), "MN": (46.4, -93.1), "MS": (32.7, -89.7),
+    "MO": (38.5, -92.5), "MT": (47.0, -109.6), "NE": (41.5, -99.9),
+    "NV": (39.3, -116.6), "NH": (43.7, -71.6), "NJ": (40.1, -74.5),
+    "NM": (34.5, -106.1), "NY": (43.0, -75.5), "NC": (35.5, -79.8),
+    "ND": (47.5, -100.5), "OH": (40.4, -82.7), "OK": (35.6, -97.5),
+    "OR": (44.1, -120.5), "PA": (40.9, -77.8), "RI": (41.7, -71.5),
+    "SC": (33.8, -80.9), "SD": (44.4, -100.2), "TN": (35.9, -86.7),
+    "TX": (31.1, -97.6), "UT": (39.3, -111.1), "VT": (44.0, -72.7),
+    "VA": (37.8, -78.2), "WA": (47.4, -120.5), "WV": (38.9, -80.5),
+    "WI": (44.3, -89.8), "WY": (43.0, -107.6), "DC": (38.9, -77.0),
+}
+
+
+# ---------------------------------------------------------------------------
 # Location extraction
 # ---------------------------------------------------------------------------
 
@@ -74,25 +99,15 @@ def _extract_location(
     """
     Extract (lat, lon, city, state, precision) from an ER article's location data.
 
+    The ER free API often omits lat/lon from article location objects, providing
+    only a label (e.g. "Minnesota"). When coordinates are absent but the label
+    resolves to a known US state, state centroid coordinates are used as a fallback
+    (precision = "state").
+
     Returns None if no usable location is found or precision is country-level.
     """
     loc = article.get("location")
     if not loc:
-        return None
-
-    lat = loc.get("lat")
-    lon = loc.get("long")
-    if lat is None or lon is None:
-        return None
-
-    try:
-        lat = float(lat)
-        lon = float(lon)
-    except (TypeError, ValueError):
-        return None
-
-    # Reject null-island
-    if lat == 0.0 and lon == 0.0:
         return None
 
     # ER location type hierarchy
@@ -103,14 +118,15 @@ def _extract_location(
     elif isinstance(loc_type_obj, str):
         loc_type = loc_type_obj
 
+    if loc_type == "country":
+        return None  # country-level — always discard
+
     if loc_type == "place":
         precision = "venue"
     elif loc_type == "city":
         precision = "city"
     elif loc_type in ("admin", "admin1", "admin2"):
         precision = "state"
-    elif loc_type == "country":
-        return None  # country-level — always discard
     else:
         precision = "city"  # conservative default
 
@@ -145,6 +161,27 @@ def _extract_location(
                 candidate_state if len(candidate_state) == 2 else None
             )
             city = None  # no city-level precision
+
+    # Try explicit coordinates first
+    lat = loc.get("lat")
+    lon = loc.get("long")
+    try:
+        lat = float(lat) if lat is not None else None
+        lon = float(lon) if lon is not None else None
+    except (TypeError, ValueError):
+        lat, lon = None, None
+
+    if lat is None or lon is None:
+        # Fall back to US state centroid when label resolves to a known state
+        if state and state in _STATE_CENTROIDS:
+            lat, lon = _STATE_CENTROIDS[state]
+            precision = "state"   # demote precision to match coordinate quality
+        else:
+            return None
+
+    # Reject null-island
+    if lat == 0.0 and lon == 0.0:
+        return None
 
     return lat, lon, city, state, precision
 
@@ -205,11 +242,10 @@ def _build_request(lookback_hours: int, page: int, count: int) -> dict:
     return {
         "apiKey": settings.event_registry_api_key,
         "action": "getArticles",
-        "keyword": (
-            "protest OR riot OR unrest OR \"police clash\" OR \"political violence\" "
-            "OR vandalism OR \"crowd disruption\" OR demonstration OR \"tear gas\" "
-            "OR looting OR \"march against\" OR \"rally against\""
-        ),
+        # Boolean OR queries are not supported on the free subscription tier —
+        # they silently return 0 results. Use a single high-recall keyword instead;
+        # the classifier provides the event-type gate downstream.
+        "keyword": "protest",
         "keywordsLoc": "title,body",
         "locationUri": _ER_US_LOCATION_URI,
         "lang": "eng",
@@ -360,6 +396,11 @@ class EventRegistrySource:
                 data = resp.json()
             except Exception as e:
                 print(f"[eventregistry] Fetch error (page {page}): {e}")
+                break
+
+            # ER returns HTTP 200 with {"error": "..."} for API-level errors
+            if "error" in data:
+                print(f"[eventregistry] API error: {data['error']}")
                 break
 
             articles_block = data.get("articles", {})

@@ -25,6 +25,7 @@ export default function App() {
   const [hotspotDetail, setHotspotDetail]               = useState(null)
   const [hotspotDetailLoading, setHotspotDetailLoading] = useState(false)
   const pendingHotspotId = useRef(null)
+  const selectedItemRef  = useRef(null)
   const [eventDetail, setEventDetail]               = useState(null)
   const [eventDetailLoading, setEventDetailLoading] = useState(false)
   const pendingEventId = useRef(null)
@@ -34,7 +35,7 @@ export default function App() {
   const [minConfidence, setMinConfidence] = useState(0)
   const [activeTrends,  setActiveTrends]  = useState(new Set())
 
-  // Fetch all data once on mount
+  // Fetch all data on mount; poll hotspots/priorities/status every 60s thereafter
   useEffect(() => {
     Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
       .then(([evPage, hs, pr, status]) => {
@@ -49,6 +50,36 @@ export default function App() {
       })
       .catch(err => console.error('[Flashpoint] fetch error:', err))
       .finally(() => setLoading(false))
+
+    // Poll hotspots, priorities, and system status every 60s.
+    // Events are not polled — the user may have paginated and polling would reset that state.
+    const pollId = setInterval(() => {
+      Promise.all([fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
+        .then(([hs, pr, status]) => {
+          setHotspots(hs)
+          setPriorities(pr)
+          setSystemStatus(status)
+          setLastUpdated(new Date())
+
+          // Reconcile selection: if a hotspot is selected, check it still exists.
+          // selectedItemRef.current is kept in sync via a separate effect below.
+          const sel = selectedItemRef.current
+          if (sel?.type === 'hotspot') {
+            const stillExists = hs.find(h => h.id === sel.data.id)
+            if (stillExists) {
+              setSelectedItem({ type: 'hotspot', data: stillExists })
+            } else {
+              pendingHotspotId.current = null
+              setSelectedItem(null)
+              setHotspotDetail(null)
+              setHotspotDetailLoading(false)
+            }
+          }
+        })
+        .catch(err => console.error('[Flashpoint] poll error:', err))
+    }, 60_000)
+
+    return () => clearInterval(pollId)
   }, [])
 
   // Load the next page of events and merge by id to prevent duplicates
@@ -68,6 +99,9 @@ export default function App() {
       .catch(err => console.error('[Flashpoint] load more error:', err))
       .finally(() => setEventsLoadingMore(false))
   }
+
+  // Keep selectedItemRef in sync so the poll interval can read current selection
+  useEffect(() => { selectedItemRef.current = selectedItem }, [selectedItem])
 
   // Escape key to dismiss selection
   useEffect(() => {
@@ -105,8 +139,13 @@ export default function App() {
           if (pendingHotspotId.current === id) setHotspotDetail(detail)
         })
         .catch(err => {
-          if (pendingHotspotId.current === id)
+          if (pendingHotspotId.current === id) {
             console.error('[Flashpoint] hotspot detail error:', err)
+            pendingHotspotId.current = null
+            setSelectedItem(null)
+            setHotspotDetail(null)
+            setHotspotDetailLoading(false)
+          }
         })
         .finally(() => {
           if (pendingHotspotId.current === id) setHotspotDetailLoading(false)

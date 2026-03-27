@@ -310,7 +310,7 @@ export default function DetailPane({ item, onClose, hotspotDetail, hotspotDetail
             detailLoading={eventDetailLoading ?? false}
           />
         : <HotspotDetail
-            hotspot={item.data}
+            hotspot={hotspotDetail || item.data}
             memberEvents={hotspotDetail?.member_events}
             loading={hotspotDetailLoading ?? false}
           />

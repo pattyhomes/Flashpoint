@@ -56,6 +56,9 @@ export default function EventFeed({ events, loadedCount = 0, total = 0, hasMore 
         <span className="panel-header__count">{primaryCount}{visibleLabel}</span>
       </div>
       <div className="event-feed__list" ref={listRef}>
+        {events.length === 0 && (
+          <span className="event-feed__empty">No events match the current filters.</span>
+        )}
         {events.map(event => (
           <EventRow
             key={event.id}

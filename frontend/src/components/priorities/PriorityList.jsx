@@ -43,6 +43,9 @@ export default function PriorityList({ priorities, selectedItem, onSelect }) {
         <span className="panel-header__count">{priorities.length}</span>
       </div>
       <div className="priority-list__items">
+        {priorities.length === 0 && (
+          <span className="priority-list__empty">No priorities match the current filters.</span>
+        )}
         {priorities.map((p, i) => (
           <PriorityCard
             key={p.id}

@@ -1,19 +1,11 @@
 import { useRef, useEffect } from 'react'
+import { relativeTime } from '../../utils/time'
 
 function severityColor(score) {
   if (score >= 0.8) return '#ef4444'
   if (score >= 0.6) return '#f59e0b'
   if (score >= 0.4) return '#eab308'
   return '#22c55e'
-}
-
-function relativeTime(iso) {
-  if (!iso) return '—'
-  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (sec < 60) return `${sec}s`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m`
-  return `${Math.floor(min / 60)}h`
 }
 
 function gdeltDisplayTitle(event) {

@@ -32,12 +32,21 @@ _C = {
     # GDELT 2.0 has 61 columns. Each Geo block is 8 fields (Type, FullName,
     # CountryCode, ADM1Code, FeatureID, Lat, Long, ObjectID). There are
     # 3 geo blocks (Actor1, Actor2, Action) at offsets 35, 43, 51.
+    "ActionGeo_Type":      51,   # 1=country,2=state,3=city,4=feature/place
     "ActionGeo_FullName":  52,
     "ActionGeo_CountryCode": 53,
     "ActionGeo_ADM1Code":  54,   # e.g. "USWA" → state "WA"
     "ActionGeo_Lat":       56,
     "ActionGeo_Long":      57,
     "SOURCEURL":           60,
+}
+
+# GDELT ActionGeo_Type → location_precision
+_GEO_TYPE_TO_PRECISION = {
+    "1": "country",
+    "2": "state",
+    "3": "city",
+    "4": "venue",
 }
 
 # CAMEO root codes included in V1 filter
@@ -145,6 +154,8 @@ def _row_to_event(row: list[str]) -> EventCreate | None:
     occurred_at = datetime.strptime(day_str, "%Y%m%d").replace(hour=12)
 
     # Location
+    geo_type_raw = row[_C["ActionGeo_Type"]].strip()
+    location_precision = _GEO_TYPE_TO_PRECISION.get(geo_type_raw, "city")
     full_name = row[_C["ActionGeo_FullName"]].strip()
     adm1 = row[_C["ActionGeo_ADM1Code"]].strip()
     parts = [p.strip() for p in full_name.split(",")]
@@ -194,6 +205,7 @@ def _row_to_event(row: list[str]) -> EventCreate | None:
         source_count=num_sources,
         confidence_score=confidence,
         severity_score=severity,
+        location_precision=location_precision,
         raw_payload_json=json.dumps({
             "event_code": event_code,
             "root_code": root_code,

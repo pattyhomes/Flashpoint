@@ -10,7 +10,7 @@ Algorithm:
   6. Write cluster_id and trend_state back to each assigned Event.
   7. Write all computed scores back to each Hotspot.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 import math
 
@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.models import Event, Hotspot
 
-CLUSTER_RADIUS_MILES = 150   # metro-region radius — events within this distance merge
+CLUSTER_RADIUS_MILES = 75    # metro-region radius — events within this distance merge
+CLUSTER_WINDOW_HOURS = 72   # only events within this lookback window form hotspots
 MIN_EVENTS           = 3     # minimum members to form a hotspot
 MAX_HOTSPOTS         = 15    # cap to avoid UI clutter
 
@@ -99,6 +100,17 @@ def _cluster_events(events: list[Event]) -> list[dict]:
         state_level   = _is_state_level(event)
         country_level = _is_country_level(event)
 
+        # State-level events: always defer to Pass 2. Their coordinates point to state
+        # geographic centroids, not actual incident locations, so they should not join
+        # or inflate city-level clusters.
+        if state_level:
+            unassigned_state.append(event)
+            continue
+
+        # Country-level events: drop entirely — too imprecise to be meaningful.
+        if country_level:
+            continue
+
         # Find nearest existing candidate
         nearest_idx, nearest_d = -1, float("inf")
         for i, c in enumerate(candidates):
@@ -107,14 +119,14 @@ def _cluster_events(events: list[Event]) -> list[dict]:
                 nearest_d, nearest_idx = d, i
 
         if nearest_d <= CLUSTER_RADIUS_MILES:
-            # Merge into nearest candidate via running mean (all events may join)
+            # Merge into nearest candidate via running mean
             c = candidates[nearest_idx]
             n = c["n"]
             c["lat"] = (c["lat"] * n + event.latitude)  / (n + 1)
             c["lon"] = (c["lon"] * n + event.longitude) / (n + 1)
             c["n"]  += 1
             c["members"].append(event)
-        elif not state_level and not country_level:
+        else:
             # Precise city/county event starts a new cluster
             candidates.append({
                 "lat": event.latitude,
@@ -122,11 +134,6 @@ def _cluster_events(events: list[Event]) -> list[dict]:
                 "n": 1,
                 "members": [event],
             })
-        elif state_level:
-            # State-level event with no nearby cluster — defer to pass 2 fallback
-            unassigned_state.append(event)
-        # Country-level events that can't join are dropped (remain unassigned —
-        # too imprecise to anchor or fall back to a named hotspot)
 
     # Pass 2: state-region fallback clusters
     by_state: dict[str, list[Event]] = defaultdict(list)
@@ -235,7 +242,7 @@ def _trend(members: list[Event], now: datetime) -> str:
     r_count, e_count = len(recent), len(earlier)
     r_sev = sum(e.severity_score for e in recent)  / r_count if r_count else 0.0
     e_sev = sum(e.severity_score for e in earlier) / e_count if e_count else 0.0
-    if r_count > e_count or r_sev > e_sev + 0.15:
+    if r_count >= 2 and (r_count > e_count or r_sev > e_sev + 0.15):
         return "escalating"
     if e_count > r_count * 2 and e_sev > r_sev:
         return "declining"
@@ -264,7 +271,11 @@ def compute_hotspots(db: Session) -> None:
     )
     db.flush()
 
-    events = db.query(Event).filter(Event.is_active == True).all()
+    cluster_cutoff = now - timedelta(hours=CLUSTER_WINDOW_HOURS)
+    events = db.query(Event).filter(
+        Event.is_active == True,
+        Event.occurred_at >= cluster_cutoff,
+    ).all()
     if not events:
         db.query(Hotspot).delete()
         db.commit()

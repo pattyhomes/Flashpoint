@@ -1,18 +1,9 @@
-function relativeTime(date) {
-  if (!date) return null
-  const sec = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (sec < 10) return 'just now'
-  if (sec < 60) return `${sec}s ago`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m ago`
-  return `${Math.floor(min / 60)}h ago`
-}
+import { parseUTC, relativeTimeAgo } from '../../utils/time'
 
 export default function StatusBar({ lastUpdated, loading, systemStatus }) {
-  // Backend emits naive UTC strings (no 'Z') — append 'Z' to force UTC parsing in JS.
-  // Prefer last_success_at (run freshness) over last_computed_at (compute freshness).
-  const successAt  = systemStatus?.last_success_at  ? new Date(systemStatus.last_success_at  + 'Z') : null
-  const computedAt = systemStatus?.last_computed_at ? new Date(systemStatus.last_computed_at + 'Z') : null
+  // parseUTC handles naive UTC strings from the backend (no 'Z' suffix).
+  const successAt  = parseUTC(systemStatus?.last_success_at)
+  const computedAt = parseUTC(systemStatus?.last_computed_at)
   const displayDate = successAt ?? computedAt ?? lastUpdated
 
   const isRunning = systemStatus?.last_run_status === 'running'
@@ -32,7 +23,7 @@ export default function StatusBar({ lastUpdated, loading, systemStatus }) {
         ? <span className="status-bar__loading">Loading…</span>
         : <>
             <span className="status-bar__updated">
-              {displayDate ? `Updated ${relativeTime(displayDate)}` : '—'}
+              {displayDate ? `Updated ${relativeTimeAgo(displayDate)}` : '—'}
             </span>
             {systemStatus && (
               <span className="status-bar__counts">

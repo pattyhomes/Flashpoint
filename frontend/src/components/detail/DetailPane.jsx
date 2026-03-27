@@ -1,4 +1,5 @@
 import { useRef, useEffect } from 'react'
+import { relativeTime, formatDate } from '../../utils/time'
 
 function severityColor(score) {
   if (score >= 0.8) return '#ef4444'
@@ -20,24 +21,6 @@ function ScoreBar({ label, value }) {
       <span className="score-bar-row__val">{Math.round(value * 100)}</span>
     </div>
   )
-}
-
-function formatDate(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return d.toLocaleString('en-US', {
-    month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
-
-function relativeTime(iso) {
-  if (!iso) return '—'
-  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (sec < 60) return `${sec}s`
-  const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m`
-  return `${Math.floor(min / 60)}h`
 }
 
 function badgeStyle(type) {
@@ -64,12 +47,19 @@ function hotspotSummary(h, memberEvents) {
   const sev   = h.severity_score >= 0.8 ? 'high-severity'
               : h.severity_score >= 0.5 ? 'moderate-severity'
               : 'low-severity'
-  let text = `${trend} ${sev} cluster with ${h.event_count} event${h.event_count !== 1 ? 's' : ''}. Priority score ${Math.round(h.priority_score * 100)}.`
+  let text = `${trend} ${sev} cluster · ${h.event_count} event${h.event_count !== 1 ? 's' : ''} · priority ${Math.round(h.priority_score * 100)}.`
   if (memberEvents.length > 0) {
     const counts = {}
     memberEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1 })
     const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
-    text += ` Predominant activity type: ${dominant}.`
+    text += ` Predominant type: ${dominant}.`
+    // Note imprecise location coverage
+    const imprecise = memberEvents.filter(e => e.location_precision === 'state' || e.location_precision === 'country').length
+    if (imprecise > 0 && imprecise === memberEvents.length) {
+      text += ` Regional aggregate — all signals are state-level. Location is approximate.`
+    } else if (imprecise > 0) {
+      text += ` ${imprecise} event${imprecise !== 1 ? 's' : ''} with imprecise location — cluster label may be approximate.`
+    }
   }
   return text
 }

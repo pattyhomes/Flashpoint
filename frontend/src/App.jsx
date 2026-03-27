@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { fetchEvents, fetchHotspots, fetchHotspotDetail, fetchPriorities, fetchSystemStatus } from './services/api.js'
+import { fetchEvents, fetchEventDetail, fetchHotspots, fetchHotspotDetail, fetchPriorities, fetchSystemStatus } from './services/api.js'
 
 import Shell from './components/layout/Shell.jsx'
 import StatusBar from './components/layout/StatusBar.jsx'
@@ -25,6 +25,9 @@ export default function App() {
   const [hotspotDetail, setHotspotDetail]               = useState(null)
   const [hotspotDetailLoading, setHotspotDetailLoading] = useState(false)
   const pendingHotspotId = useRef(null)
+  const [eventDetail, setEventDetail]               = useState(null)
+  const [eventDetailLoading, setEventDetailLoading] = useState(false)
+  const pendingEventId = useRef(null)
   const [activeTypes, setActiveTypes]   = useState(new Set())
   const [layersVisible, setLayersVisible] = useState({ events: true, hotspots: true, heatmap: false })
   const [minSeverity,   setMinSeverity]   = useState(0)
@@ -71,16 +74,19 @@ export default function App() {
     const onKey = (e) => {
       if (e.key === 'Escape') {
         pendingHotspotId.current = null
+        pendingEventId.current = null
         setSelectedItem(null)
         setHotspotDetail(null)
         setHotspotDetailLoading(false)
+        setEventDetail(null)
+        setEventDetailLoading(false)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Toggle-to-deselect; load hotspot detail from backend when a hotspot is selected
+  // Toggle-to-deselect; load detail from backend when a hotspot or event is selected
   function handleSelect(item) {
     const isSame = selectedItem?.type === item.type && selectedItem?.data?.id === item.data.id
     const next = isSame ? null : item
@@ -89,8 +95,11 @@ export default function App() {
     if (next?.type === 'hotspot') {
       const id = next.data.id
       pendingHotspotId.current = id
+      pendingEventId.current = null
       setHotspotDetail(null)
       setHotspotDetailLoading(true)
+      setEventDetail(null)
+      setEventDetailLoading(false)
       fetchHotspotDetail(id)
         .then(detail => {
           if (pendingHotspotId.current === id) setHotspotDetail(detail)
@@ -102,10 +111,32 @@ export default function App() {
         .finally(() => {
           if (pendingHotspotId.current === id) setHotspotDetailLoading(false)
         })
-    } else {
+    } else if (next?.type === 'event') {
+      const id = next.data.id
+      pendingEventId.current = id
       pendingHotspotId.current = null
+      setEventDetail(null)
+      setEventDetailLoading(true)
       setHotspotDetail(null)
       setHotspotDetailLoading(false)
+      fetchEventDetail(id)
+        .then(detail => {
+          if (pendingEventId.current === id) setEventDetail(detail)
+        })
+        .catch(err => {
+          if (pendingEventId.current === id)
+            console.error('[Flashpoint] event detail error:', err)
+        })
+        .finally(() => {
+          if (pendingEventId.current === id) setEventDetailLoading(false)
+        })
+    } else {
+      pendingHotspotId.current = null
+      pendingEventId.current = null
+      setHotspotDetail(null)
+      setHotspotDetailLoading(false)
+      setEventDetail(null)
+      setEventDetailLoading(false)
     }
   }
 
@@ -169,7 +200,12 @@ export default function App() {
   useEffect(() => {
     if (!selectedItem) return
     if (selectedItem.type === 'event') {
-      if (!filteredEvents.find(e => e.id === selectedItem.data.id)) setSelectedItem(null)
+      if (!filteredEvents.find(e => e.id === selectedItem.data.id)) {
+        pendingEventId.current = null
+        setSelectedItem(null)
+        setEventDetail(null)
+        setEventDetailLoading(false)
+      }
     } else {
       if (!filteredHotspots.find(h => h.id === selectedItem.data.id)) {
         pendingHotspotId.current = null
@@ -213,12 +249,17 @@ export default function App() {
             item={selectedItem}
             onClose={() => {
               pendingHotspotId.current = null
+              pendingEventId.current = null
               setSelectedItem(null)
               setHotspotDetail(null)
               setHotspotDetailLoading(false)
+              setEventDetail(null)
+              setEventDetailLoading(false)
             }}
             hotspotDetail={hotspotDetail}
             hotspotDetailLoading={hotspotDetailLoading}
+            eventDetail={eventDetail}
+            eventDetailLoading={eventDetailLoading}
           />
         </>
       }

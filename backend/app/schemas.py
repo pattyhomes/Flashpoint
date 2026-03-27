@@ -27,6 +27,7 @@ class EventCreate(BaseModel):
     cluster_id: int | None = None
     trend_state: str | None = None
     is_active: bool = True
+    location_precision: str | None = None
     raw_payload_json: str | None = None
 
 
@@ -56,8 +57,28 @@ class EventOut(BaseModel):
     cluster_id: int | None
     trend_state: str | None
     is_active: bool
+    location_precision: str | None
 
     model_config = {"from_attributes": True}
+
+
+class EventSourceOut(BaseModel):
+    id: int
+    source_type: str
+    source_record_id: str | None
+    source_name: str | None
+    source_url: str | None
+    source_title: str | None
+    source_published_at: datetime | None
+    source_trust_weight: float
+    location_precision: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class EventDetailOut(EventOut):
+    """EventOut extended with per-source provenance records."""
+    sources: list[EventSourceOut] = []
 
 
 class HotspotOut(BaseModel):

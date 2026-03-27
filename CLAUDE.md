@@ -33,6 +33,8 @@ Chromium kiosk mode is superseded. Do not plan or implement Chromium-based deliv
 | System status + freshness endpoint | done |
 | Failure-aware operator status UI | done |
 | Mock ingestion + IngestRun persistence | done |
+| Event Registry ingestion source | done — classifier, dedupe, corroboration, confidence caps, source provenance |
+| `event_sources` table + `EventDetailOut` API | done |
 | `desktop/` PySide6 shell (Milestone A) | done |
 | Desktop runtime orchestration (launcher, managed ports) | done |
 | Desktop runtime configuration (`desktop/app/config.py`, Pi seam flags) | done |

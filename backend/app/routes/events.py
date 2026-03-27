@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Event
-from app.schemas import EventOut, EventPage
+from app.models import Event, EventSource
+from app.schemas import EventDetailOut, EventOut, EventPage
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -26,9 +26,16 @@ def list_events(
     }
 
 
-@router.get("/{event_id}", response_model=EventOut)
+@router.get("/{event_id}", response_model=EventDetailOut)
 def get_event(event_id: int, db: Session = Depends(get_db)):
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    return event
+    sources = (
+        db.query(EventSource)
+        .filter(EventSource.event_id == event_id)
+        .order_by(EventSource.source_published_at.desc())
+        .all()
+    )
+    base = EventOut.model_validate(event).model_dump()
+    return {**base, "sources": sources}

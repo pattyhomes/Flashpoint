@@ -21,5 +21,18 @@ class Settings(BaseSettings):
     mock_data_enabled: bool = True
     ingest_source: str = "mock"  # "mock" | "gdelt"
 
+    # Event Registry — supplementary source for corroboration and selective discovery
+    event_registry_enabled: bool = False
+    event_registry_api_key: str = ""
+    event_registry_interval_seconds: int = 1800
+    event_registry_lookback_hours: int = 6
+    event_registry_max_records: int = 100
+    event_registry_us_only: bool = True
+    event_registry_min_classification_score: float = 0.6
+    event_registry_min_location_precision: str = "city"   # "venue" | "city" | "state"
+    event_registry_create_new_events: bool = False
+    event_registry_max_new_events_per_run: int = 10
+    event_registry_max_confidence_uncorroborated: float = 0.58
+
 
 settings = Settings()

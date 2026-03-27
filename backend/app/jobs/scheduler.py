@@ -26,6 +26,21 @@ def start_scheduler():
             replace_existing=True,
         )
 
+    # Event Registry — supplementary source; runs alongside the primary source
+    if settings.event_registry_enabled and settings.event_registry_api_key:
+        from app.jobs.seed import run_eventregistry_ingestion
+        scheduler.add_job(
+            run_eventregistry_ingestion,
+            "interval",
+            seconds=settings.event_registry_interval_seconds,
+            id="eventregistry_ingestion",
+            replace_existing=True,
+        )
+        print(
+            f"[scheduler] Event Registry ingestion registered "
+            f"(interval={settings.event_registry_interval_seconds}s)."
+        )
+
     scheduler.start()
 
 

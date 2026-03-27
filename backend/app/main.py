@@ -19,6 +19,7 @@ def _migrate():
     with engine.connect() as conn:
         for stmt in [
             "ALTER TABLE ingest_runs ADD COLUMN ingest_source VARCHAR(32)",
+            "ALTER TABLE events ADD COLUMN location_precision VARCHAR(32)",
         ]:
             try:
                 conn.execute(text(stmt))

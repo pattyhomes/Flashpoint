@@ -42,10 +42,16 @@ function relativeTime(iso) {
 
 function badgeStyle(type) {
   const colors = {
-    violence:   { color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
-    unrest:     { color: '#f59e0b', border: 'rgba(245,158,11,0.4)' },
-    disruption: { color: '#eab308', border: 'rgba(234,179,8,0.4)' },
-    protest:    { color: '#22c55e', border: 'rgba(34,197,94,0.4)' },
+    violence:                       { color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
+    political_violence:             { color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
+    riot:                           { color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
+    police_clash:                   { color: '#f59e0b', border: 'rgba(245,158,11,0.4)' },
+    unrest:                         { color: '#f59e0b', border: 'rgba(245,158,11,0.4)' },
+    vandalism_tied_to_unrest:       { color: '#f59e0b', border: 'rgba(245,158,11,0.4)' },
+    crowd_disruption:               { color: '#eab308', border: 'rgba(234,179,8,0.4)' },
+    protest_related_road_shutdown:  { color: '#eab308', border: 'rgba(234,179,8,0.4)' },
+    disruption:                     { color: '#eab308', border: 'rgba(234,179,8,0.4)' },
+    protest:                        { color: '#22c55e', border: 'rgba(34,197,94,0.4)' },
   }
   const c = colors[type] || { color: '#9aa0b0', border: 'rgba(154,160,176,0.4)' }
   return { color: c.color, borderColor: c.border }
@@ -68,12 +74,55 @@ function hotspotSummary(h, memberEvents) {
   return text
 }
 
-function EventDetail({ event }) {
+// Source evidence section for Event Registry articles
+function SourceList({ sources }) {
+  if (!sources || sources.length === 0) return null
+  const independent = sources.filter(s => s.source_trust_weight > 0)
+  return (
+    <div className="detail-section">
+      <span className="detail-section__heading">
+        Sources{independent.length > 0 ? ` (${independent.length} independent)` : ''}
+      </span>
+      {sources.map(src => {
+        const isSyndicated = src.source_trust_weight === 0
+        const titleText = src.source_title
+          ? (src.source_title.length > 72 ? src.source_title.slice(0, 72) + '…' : src.source_title)
+          : null
+        return (
+          <div key={src.id} className="source-row" style={{ opacity: isSyndicated ? 0.55 : 1 }}>
+            <span className="source-row__outlet">{src.source_name || '—'}</span>
+            <span className="source-row__title">
+              {src.source_url && titleText
+                ? <a href={src.source_url} target="_blank" rel="noreferrer" className="source-row__link">{titleText}</a>
+                : titleText || '—'
+              }
+              {isSyndicated && (
+                <span className="source-row__syndicated"> [SYNDICATED]</span>
+              )}
+            </span>
+            <span className="source-row__time">{relativeTime(src.source_published_at)}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function EventDetail({ event, detail, detailLoading }) {
   const location = [event.city, event.state].filter(Boolean).join(', ') || event.country
   const isGdelt = event.source_name === 'gdelt'
   const displayTitle = isGdelt
     ? `${event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)} coded signal — ${location}`
     : event.title
+
+  // Use the enriched detail from backend when available; fall back to list data
+  const enriched = detail || event
+  const sources  = detail?.sources ?? []
+
+  // Location precision indicator (show when city-level or worse)
+  const precision = enriched.location_precision
+  const showPrecision = precision && precision !== 'venue'
+
   return (
     <div className="detail-body">
       <div className="detail-title">{displayTitle}</div>
@@ -100,7 +149,14 @@ function EventDetail({ event }) {
       <div className="detail-meta">
         <div className="detail-row">
           <span className="detail-row__label">Location</span>
-          <span className="detail-row__value detail-row__value--primary">{location}</span>
+          <span className="detail-row__value detail-row__value--primary">
+            {location}
+            {showPrecision && (
+              <span style={{ color: 'var(--text-muted)', fontWeight: 'normal', marginLeft: '0.4em' }}>
+                ({precision}-level)
+              </span>
+            )}
+          </span>
         </div>
         <div className="detail-row">
           <span className="detail-row__label">Occurred</span>
@@ -114,7 +170,12 @@ function EventDetail({ event }) {
         )}
         <div className="detail-row">
           <span className="detail-row__label">Source</span>
-          <span className="detail-row__value">{event.source_name}</span>
+          <span className="detail-row__value">
+            {enriched.source_url
+              ? <a href={enriched.source_url} target="_blank" rel="noreferrer" className="source-row__link">{event.source_name}</a>
+              : event.source_name
+            }
+          </span>
         </div>
         {(isGdelt || event.source_count > 1) && (
           <div className="detail-row">
@@ -138,6 +199,14 @@ function EventDetail({ event }) {
           </p>
         </div>
       )}
+
+      {detailLoading && (
+        <div className="detail-section">
+          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Loading sources…</span>
+        </div>
+      )}
+
+      {!detailLoading && <SourceList sources={sources} />}
     </div>
   )
 }
@@ -220,7 +289,7 @@ function HotspotDetail({ hotspot, memberEvents, loading }) {
   )
 }
 
-export default function DetailPane({ item, onClose, hotspotDetail, hotspotDetailLoading }) {
+export default function DetailPane({ item, onClose, hotspotDetail, hotspotDetailLoading, eventDetail, eventDetailLoading }) {
   const paneRef = useRef(null)
 
   // Reset scroll to top whenever the selected item changes
@@ -245,7 +314,11 @@ export default function DetailPane({ item, onClose, hotspotDetail, hotspotDetail
         <button className="detail-pane__close" onClick={onClose} aria-label="Close">✕</button>
       </div>
       {item.type === 'event'
-        ? <EventDetail event={item.data} />
+        ? <EventDetail
+            event={item.data}
+            detail={eventDetail}
+            detailLoading={eventDetailLoading ?? false}
+          />
         : <HotspotDetail
             hotspot={item.data}
             memberEvents={hotspotDetail?.member_events}

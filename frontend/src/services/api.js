@@ -8,6 +8,8 @@ async function request(path) {
 
 // Returns EventPage: { items, total, limit, offset, has_more }
 export const fetchEvents        = (limit = 500, offset = 0) => request(`/events/?limit=${limit}&offset=${offset}`)
+// Returns EventDetailOut: EventOut + sources[]
+export const fetchEventDetail   = (id)                      => request(`/events/${id}`)
 export const fetchHotspots      = ()                        => request('/hotspots/')
 export const fetchHotspotDetail = (id)                      => request(`/hotspots/${id}`)
 export const fetchPriorities    = ()                        => request('/priorities/')

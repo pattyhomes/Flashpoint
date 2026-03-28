@@ -21,9 +21,10 @@ Mac development continues to use pip-installed PySide6 as before.
 |---|---|---|
 | Backend systemd service | `flashpoint-backend.service` | `~/.config/systemd/user/flashpoint-backend.service` |
 | Desktop autostart entry | `flashpoint.desktop` | `~/.config/autostart/flashpoint.desktop` |
+| Desktop launcher icon | `Flashpoint-launcher.desktop` | `~/Desktop/Flashpoint.desktop` |
 
-The install helper (`install.sh`) substitutes the absolute repo path into both templates.
-`scripts/pi_start.sh` (in the repo) is referenced directly by the autostart entry — it is
+The install helper (`install.sh`) substitutes the absolute repo path into all three templates.
+`scripts/pi_start.sh` (in the repo) is referenced directly by both `.desktop` entries — it is
 not copied; the repo must remain at its installed path.
 
 ---
@@ -177,6 +178,23 @@ bash scripts/pi_start.sh
 
 ---
 
+## Closing and Relaunching
+
+The shell runs fullscreen with no window manager chrome. Two quit mechanisms are available:
+
+- **On-screen close button** — a `✕` button in the top-right corner, always visible. Click it to quit.
+- **Ctrl+Q keyboard shortcut** — same effect.
+
+Both are controlled by `FLASHPOINT_DEV_QUIT=1` in `pi_start.sh`. The backend service
+(`flashpoint-backend.service`) continues running when the shell quits — it does not need
+to be restarted.
+
+**To relaunch**, click the **Flashpoint** icon on the desktop (`~/Desktop/Flashpoint.desktop`).
+A duplicate-instance guard (`flock`) ensures clicking the icon when the shell is already running
+exits silently rather than opening a second window.
+
+---
+
 ## Known Gaps
 
 ### Frontend delivery — resolved at code level, hardware not yet validated
@@ -208,6 +226,7 @@ systemctl --user disable flashpoint-backend
 # Remove installed files
 rm -f ~/.config/systemd/user/flashpoint-backend.service
 rm -f ~/.config/autostart/flashpoint.desktop
+rm -f ~/Desktop/Flashpoint.desktop
 
 # Reload systemd user daemon
 systemctl --user daemon-reload

@@ -8,8 +8,11 @@
 # Launches the Flashpoint desktop shell with Pi-appropriate runtime settings:
 #   FLASHPOINT_MANAGED=1    — backend is managed by systemd, not subprocess
 #   FLASHPOINT_FULLSCREEN=1 — fullscreen window (Pi Touch Display 2)
-#   FLASHPOINT_DEV_QUIT=0   — dev quit shortcut not registered on appliance display
+#   FLASHPOINT_DEV_QUIT=1   — on-screen close button + Ctrl+Q shortcut enabled
 #   FLASHPOINT_BACKEND_HEALTH_URL — explicit 127.0.0.1 to avoid localhost→::1 (IPv6)
+#
+# Duplicate-instance guard: flock on /tmp/flashpoint-shell.lock prevents a
+# second launch (e.g. desktop icon while autostart is already running).
 #
 # The shell's health poller handles backend readiness. This script does not
 # wait for the backend — the shell retries automatically if it starts first.
@@ -27,9 +30,17 @@ set -e
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Prevent duplicate instances. If the shell is already running, this second
+# launch exits silently. flock is atomic; pgrep-based guards have a TOCTOU race.
+exec 200>/tmp/flashpoint-shell.lock
+if ! flock -n 200; then
+    echo "[pi_start] Flashpoint is already running — exiting."
+    exit 0
+fi
+
 export FLASHPOINT_MANAGED=1      # backend managed by systemd — skip subprocess management
 export FLASHPOINT_FULLSCREEN=1   # fullscreen for Pi Touch Display 2
-export FLASHPOINT_DEV_QUIT=0     # no dev quit shortcut on appliance display
+export FLASHPOINT_DEV_QUIT=1     # show on-screen close button and Ctrl+Q shortcut
 
 # Explicit 127.0.0.1 — avoids localhost→::1 (IPv6) resolution ambiguity on Linux
 export FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health

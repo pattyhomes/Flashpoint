@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Flashpoint
+Comment=Launch or bring up the Flashpoint unrest monitoring shell
+# Repo path is substituted by deploy/pi/install.sh — do not edit the installed copy.
+# Uses the same pi_start.sh as the autostart entry; flock prevents duplicate instances.
+Exec=bash __REPO_ROOT__/scripts/pi_start.sh
+Icon=__REPO_ROOT__/frontend/public/favicon.svg
+Terminal=false
+Categories=Utility;

@@ -254,6 +254,39 @@ class MainWindow(QMainWindow):
             quit_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
             quit_shortcut.activated.connect(QApplication.quit)
 
+        # Close button: native close control overlaid top-right corner.
+        # PI_SEAM: gated on DEV_QUIT_ENABLED so it appears on Pi (where there is
+        # no title bar / window manager chrome) and can be suppressed if needed.
+        #
+        # WA_NativeWindow promotes the button to a real X11 window so it renders
+        # above QWebEngineView, which is also an X11 native child window.
+        # Without this flag, Qt composites the button below the webview and it
+        # is never visible once the web UI loads.
+        self._close_btn: QPushButton | None = None
+        if config.DEV_QUIT_ENABLED:
+            btn = QPushButton("✕", self)
+            btn.setObjectName("close-btn")
+            btn.setFixedSize(44, 44)
+            btn.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
+            btn.setStyleSheet(
+                "QPushButton#close-btn {"
+                "  font-size: 18px;"
+                "  color: #9aa0b0;"
+                "  background: rgba(8,10,14,180);"
+                "  border: none;"
+                "  border-radius: 4px;"
+                "}"
+                "QPushButton#close-btn:hover {"
+                "  color: #ff6b6b;"
+                "  background: rgba(8,10,14,230);"
+                "}"
+            )
+            btn.clicked.connect(QApplication.quit)
+            btn.move(0, 8)  # resizeEvent sets final position once window geometry is known
+            btn.raise_()
+            btn.show()
+            self._close_btn = btn
+
         self._poller: _HealthPoller | None = None
 
         # Boot into connecting state
@@ -308,6 +341,12 @@ class MainWindow(QMainWindow):
             self._poller.quit()
             self._poller.wait(2_000)
             self._poller = None
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._close_btn is not None:
+            self._close_btn.move(self.width() - 52, 8)
+            self._close_btn.raise_()
 
     def closeEvent(self, event) -> None:
         self._stop_poller()

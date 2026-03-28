@@ -99,6 +99,29 @@ else
 fi
 echo
 
+# ── Install desktop launcher icon ─────────────────────────────────────────────
+
+LAUNCHER_SRC="$SCRIPT_DIR/Flashpoint-launcher.desktop"
+LAUNCHER_DST="$HOME/Desktop/Flashpoint.desktop"
+
+echo "Desktop launcher icon:"
+echo "  source : $LAUNCHER_SRC"
+echo "  install: $LAUNCHER_DST"
+
+if [ "$DRY_RUN" = "1" ]; then
+    echo
+    echo "  [dry-run] Substituted content:"
+    echo "  ---"
+    sed "s|__REPO_ROOT__|$REPO_ROOT|g" "$LAUNCHER_SRC" | sed 's/^/  /'
+    echo "  ---"
+else
+    mkdir -p "$HOME/Desktop"
+    sed "s|__REPO_ROOT__|$REPO_ROOT|g" "$LAUNCHER_SRC" > "$LAUNCHER_DST"
+    chmod +x "$LAUNCHER_DST"
+    echo "  Written and marked executable."
+fi
+echo
+
 # ── Next steps ────────────────────────────────────────────────────────────────
 
 if [ "$DRY_RUN" = "1" ]; then

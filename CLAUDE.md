@@ -41,8 +41,8 @@ Chromium kiosk mode is superseded. Do not plan or implement Chromium-based deliv
 | Pi backend service scaffolding (`deploy/pi/`, systemd user service) | done |
 | Pi desktop autostart scaffolding (`deploy/pi/`, XDG autostart) | done |
 | Pi frontend delivery (StaticFiles, `pi_start.sh` URL) | done — implemented, Mac-validated, not yet Pi hardware-validated |
-| Pi end-to-end READY path | not done — hardware validation pending |
-| Boot/autostart flow (Milestone B) — hardware validation | not started |
+| Pi end-to-end READY path | done — boot → READY confirmed on RPi 5 hardware |
+| Boot/autostart flow (Milestone B) — hardware validation | done — PyQt6 required (PyQt5 crashes on RPi 5 16KB pages) |
 | Native shell surfaces (Milestone C) | not started |
 
 ## Next Priority
@@ -127,10 +127,10 @@ cd frontend && npm run lint
 
 ### Desktop shell (`desktop/`)
 
-- **Qt compat:** `desktop/app/qt_compat.py` — compatibility layer: tries PySide6 (Mac/pip), falls back to PyQt5 (Pi/system packages). All shell code imports Qt symbols from here, not from PySide6/PyQt5 directly. Pi requires `python3-pyqt5 python3-pyqt5.qtwebengine` via apt and a `--system-site-packages` venv.
+- **Qt compat:** `desktop/app/qt_compat.py` — compatibility layer: tries PyQt6 first (Pi/system packages, supports RPi 5 16KB pages), then PySide6 (Mac/pip), then PyQt5 (legacy fallback, crashes on RPi 5). All shell code imports Qt symbols from here. Pi requires `python3-pyqt6 python3-pyqt6.qtwebengine` via apt and a `--system-site-packages` venv. window.py uses fully-qualified enum paths (Qt.AlignmentFlag.*, Qt.WindowType.*, Qt.ContextMenuPolicy.*) across all three bindings.
 - **Config:** `desktop/app/config.py` — single source of truth for all desktop runtime constants (ports, timeouts, health poll settings, Pi seam flags). Both `launcher.py` and `window.py` import from here. Pi seam env vars: `FLASHPOINT_FULLSCREEN`, `FLASHPOINT_DEV_QUIT`, `FLASHPOINT_MANAGED`, `FLASHPOINT_PORTRAIT`.
 - **Launcher:** `desktop/app/launcher.py` — orchestrates backend + frontend subprocesses, waits for readiness, then calls `desktop.app.main.main()` inline. Sets `FLASHPOINT_BACKEND_HEALTH_URL` and `FLASHPOINT_FRONTEND_URL` env vars before importing the shell. Managed ports: backend 8001, frontend 5178. `FLASHPOINT_MANAGED=1` skips subprocess management (Pi path).
 - **Entry:** `desktop/app/main.py` — launched as `-m desktop.app.main` to avoid import collision with backend's `app/` package. Uses `config.FULLSCREEN` to call `showFullScreen()` vs `show()`.
 - **Window:** `desktop/app/window.py` — `_HealthPoller` (QThread, polls health endpoint), `_OverlayWidget` (native connecting/unavailable state), `MainWindow` (state machine: CONNECTING → LOADING_WEBVIEW → READY | UNAVAILABLE). `BACKEND_HEALTH_URL` and `FRONTEND_URL` read from env vars (injected by launcher) with `config.STANDALONE_*` as fallbacks.
 - **Mac Qt install:** `pip install -r desktop/requirements.txt` (PySide6 into existing `.venv`)
-- **Pi Qt install:** `sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine` + `--system-site-packages` venv
+- **Pi Qt install:** `sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine` + `--system-site-packages` venv

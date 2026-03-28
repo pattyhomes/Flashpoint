@@ -42,7 +42,7 @@ echo
 if [ ! -f "$REPO_ROOT/.venv/bin/python" ]; then
     echo "Error: .venv not found at $REPO_ROOT/.venv"
     echo "Run on Pi:"
-    echo "  sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine"
+    echo "  sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine"
     echo "  python3 -m venv --system-site-packages .venv"
     echo "  source .venv/bin/activate && pip install -e ."
     echo "See deploy/pi/README.md for full setup instructions."

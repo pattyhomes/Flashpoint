@@ -5,9 +5,12 @@ This directory contains Pi-facing runtime artifacts for Flashpoint on Raspberry 
 **Transitional:** This is scaffolding for the current Qt shell + FastAPI architecture.
 It is not a production installer. See notes on known gaps below.
 
-**Qt bindings on Pi:** The desktop shell uses system-native PyQt5 on Raspberry Pi OS
-(`python3-pyqt5 python3-pyqt5.qtwebengine`) rather than pip-installed PySide6. This
-avoids the `libwebp.so.6` / `.so.7` ABI mismatch in pip-distributed PySide6 wheels.
+**Qt bindings on Pi:** The desktop shell uses system-native PyQt6 on Raspberry Pi OS
+(`python3-pyqt6 python3-pyqt6.qtwebengine`) rather than PyQt5 or pip-installed PySide6.
+RPi 5 kernels use 16KB memory pages; Qt5 WebEngine's embedded Chromium 87 crashes on boot
+with a PartitionAlloc `mmap EINVAL` because it hardcodes 4KB page assumptions. Qt6 WebEngine
+(Chromium 102, Debian-patched for 16KB pages) loads correctly. pip-installed PySide6 also
+fails on Bookworm due to a `libwebp.so.6` / `.so.7` ABI mismatch.
 Mac development continues to use pip-installed PySide6 as before.
 
 ---
@@ -55,15 +58,16 @@ Before running the install script, ensure:
 2. **Repo is cloned** at a stable path (e.g. `/home/pi/flashpoint`)
 3. **System Qt packages installed** (required before creating the venv):
    ```bash
-   sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine
+   sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine
    ```
-   The shell uses system-native PyQt5 on Pi. pip-installed PySide6 has a library
-   ABI mismatch on Bookworm (`libwebp.so.6` vs `.so.7`) and must NOT be used.
+   The shell uses system-native PyQt6 on Pi. PyQt5 crashes on RPi 5 (16KB kernel pages;
+   see note above). pip-installed PySide6 has a `libwebp.so.6` / `.so.7` ABI mismatch
+   on Bookworm and must NOT be used.
 
 4. **Python venv created with `--system-site-packages`:**
 
    The venv MUST be created with `--system-site-packages` so the shell can access
-   the system-installed PyQt5. A plain venv will NOT work.
+   the system-installed PyQt6. A plain venv will NOT work.
 
    ```bash
    cd /home/pi/flashpoint
@@ -74,15 +78,13 @@ Before running the install script, ensure:
    # desktop/requirements.txt installs PySide6, which is Mac-only.
    ```
 
-   **Migrating an existing Pi setup:** If a `.venv` already exists from an earlier
-   setup (which would have pip-installed PySide6), you MUST delete and recreate it:
+   **Migrating an existing Pi setup:** Delete and recreate the venv to pick up PyQt6:
    ```bash
    rm -rf .venv
    python3 -m venv --system-site-packages .venv
    source .venv/bin/activate
    pip install -e .
    ```
-   A mixed environment (old venv + system PyQt5) will produce confusing import errors.
    Or run the migration script: `bash scripts/pi_fix_qt_runtime.sh`
 5. **Frontend built** — the backend serves `frontend/dist/` as static files.
    Build it on the Pi (requires Node.js) or build on your Mac and rsync it over.

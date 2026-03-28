@@ -166,16 +166,16 @@ class _OverlayWidget(QWidget):
         self.setStyleSheet(_OVERLAY_CSS)
 
         layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignCenter)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(16)
 
         name_label = QLabel("FLASHPOINT")
         name_label.setObjectName("app-name")
-        name_label.setAlignment(Qt.AlignCenter)
+        name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._status_label = QLabel("Connecting…")
         self._status_label.setObjectName("status")
-        self._status_label.setAlignment(Qt.AlignCenter)
+        self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._retry_btn = QPushButton("Retry")
         self._retry_btn.setObjectName("retry")
@@ -223,7 +223,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Flashpoint")
         self.setWindowFlags(
-            Qt.FramelessWindowHint | Qt.Window
+            Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window
         )
 
         # Stacked widget: index 0 = native overlay, index 1 = web view
@@ -237,7 +237,7 @@ class MainWindow(QMainWindow):
 
         # Page 1 — embedded web UI
         self._webview = QWebEngineView()
-        self._webview.setContextMenuPolicy(Qt.NoContextMenu)
+        self._webview.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self._webview.loadStarted.connect(lambda: _log(f"Loading {FRONTEND_URL}…"))
         self._webview.loadFinished.connect(self._on_load_finished)
         self._webview.page().renderProcessTerminated.connect(

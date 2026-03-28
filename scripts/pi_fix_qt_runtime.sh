@@ -2,13 +2,17 @@
 # Flashpoint — Pi Qt Runtime Migration
 #
 # Fixes the desktop shell runtime environment on Raspberry Pi OS Bookworm.
-# Run this after pulling changes that switched the shell from pip-installed
-# PySide6 to system-native PyQt5.
+# Run this after pulling changes that switched the shell to system-native PyQt6.
+#
+# Why PyQt6:
+#   RPi 5 kernels use 16KB memory pages. Qt5 WebEngine's Chromium 87 crashes on
+#   boot with a PartitionAlloc mmap EINVAL because it hardcodes 4KB assumptions.
+#   Qt6 WebEngine (Debian Bookworm, patched for 16KB pages) loads correctly.
 #
 # What this script does:
-#   1. Installs python3-pyqt5 and python3-pyqt5.qtwebengine via apt
-#   2. Deletes the existing .venv (which has pip-installed PySide6)
-#   3. Recreates .venv with --system-site-packages (required for system PyQt5)
+#   1. Installs python3-pyqt6 and python3-pyqt6.qtwebengine via apt
+#   2. Deletes the existing .venv (which may have pip-installed PySide6 or PyQt5)
+#   3. Recreates .venv with --system-site-packages (required for system PyQt6)
 #   4. Reinstalls backend Python deps (pip install -e .)
 #   5. Verifies the Qt compat layer imports correctly
 #
@@ -67,7 +71,7 @@ echo "====================================="
 echo "Repo root: $REPO_ROOT"
 echo
 echo "This script will:"
-echo "  1. sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine"
+echo "  1. sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine"
 echo "  2. Delete $REPO_ROOT/.venv"
 echo "  3. Recreate .venv with --system-site-packages"
 echo "  4. pip install -e .  (backend deps)"
@@ -92,8 +96,8 @@ fi
 
 # ── Step 1: System Qt packages ─────────────────────────────────────────────────
 
-echo ">>> Installing system PyQt5 packages..."
-sudo apt install -y python3-pyqt5 python3-pyqt5.qtwebengine
+echo ">>> Installing system PyQt6 packages..."
+sudo apt install -y python3-pyqt6 python3-pyqt6.qtwebengine
 echo "    Done."
 echo
 
@@ -133,8 +137,8 @@ if .venv/bin/python -c "from desktop.app.qt_compat import QApplication, QWebEngi
 else
     echo
     echo "ERROR: Qt compat layer verification failed."
-    echo "Check that python3-pyqt5.qtwebengine was installed successfully:"
-    echo "  python3 -c 'from PyQt5.QtWebEngineWidgets import QWebEngineView; print(\"OK\")'"
+    echo "Check that python3-pyqt6.qtwebengine was installed successfully:"
+    echo "  python3 -c 'from PyQt6.QtWebEngineWidgets import QWebEngineView; print(\"OK\")'"
     exit 1
 fi
 echo

@@ -222,9 +222,11 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Flashpoint")
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window
-        )
+        flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window
+        if config.FULLSCREEN:
+            # WindowStaysOnTopHint ensures the app covers the LXDE panel on Pi.
+            flags |= Qt.WindowType.WindowStaysOnTopHint
+        self.setWindowFlags(flags)
 
         # Stacked widget: index 0 = native overlay, index 1 = web view
         self._stack = QStackedWidget()
@@ -272,13 +274,13 @@ class MainWindow(QMainWindow):
                 "QPushButton#close-btn {"
                 "  font-size: 18px;"
                 "  color: #9aa0b0;"
-                "  background: rgba(8,10,14,180);"
+                "  background: #1a1e2a;"
                 "  border: none;"
                 "  border-radius: 4px;"
                 "}"
                 "QPushButton#close-btn:hover {"
                 "  color: #ff6b6b;"
-                "  background: rgba(8,10,14,230);"
+                "  background: #2a2f3a;"
                 "}"
             )
             btn.clicked.connect(QApplication.quit)

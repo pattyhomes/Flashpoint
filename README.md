@@ -18,7 +18,7 @@
 
 ---
 
-Flashpoint is a single-operator intelligence dashboard that aggregates, classifies, deduplicates, and visualizes U.S. protest and civil disruption events in near real time. It runs as a fullscreen native desktop application — designed to live permanently on a **Raspberry Pi 5 with a 7-inch touchscreen**, feeling like a real piece of installed equipment rather than a website.
+Flashpoint is a single-operator U.S. unrest and disruption monitoring workstation that aggregates, classifies, deduplicates, and visualizes U.S. protest and civil disruption events on a near-real-time 30-minute ingest cycle with last-known-data fallback. It runs as a fullscreen native desktop application — designed to live permanently on a **Raspberry Pi 5 with a 7-inch touchscreen**, feeling like a real piece of installed equipment rather than a website.
 
 The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs each article through a **deterministic NLP classifier**, deduplicates across sources with a **6-rule syndication detector**, builds **multi-source corroborated confidence scores**, clusters events into geographic hotspots with **greedy radius clustering and proximity-weighted naming**, and serves everything through a **FastAPI backend + React/MapLibre GL dashboard**, embedded in a PySide6/PyQt6 Qt shell with zero browser chrome.
 
@@ -41,7 +41,7 @@ The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs e
 - **Trend analysis** — compares 0–8h vs 8–24h event windows per cluster. Escalating / stable / declining with severity delta gating.
 - **Dark-theme map dashboard** — MapLibre GL with CARTO Dark Matter basemap. Severity-colored event circles, trend-colored hotspot glow rings, toggleable heatmap layer, fly-to animation on selection.
 - **60-second polling with selection reconciliation** — hotspots, priorities, and system status refresh automatically. If the selected hotspot is recomputed away (ID reuse), the selection is transparently cleared.
-- **Real-time operator status** — status bar shows data freshness, staleness detection, run-failed alerts, and live syncing indicators.
+- **Operator status surface** — status bar shows data freshness, staleness detection, run-failed alerts, and ingest-cycle sync indicators.
 - **Touch-ready Pi appliance** — systemd user service + XDG autostart + fullscreen Qt shell with native connecting/unavailable overlay states. No browser chrome, no accounts, no cloud.
 - **106 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming.
 

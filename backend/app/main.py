@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Flashpoint",
-    description="Local-first U.S. intelligence dashboard API",
+    description="Local-first U.S. unrest and disruption monitoring workstation API",
     version="0.1.0",
     lifespan=lifespan,
 )

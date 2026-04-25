@@ -1,13 +1,33 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import settings
 
-# check_same_thread=False is required for SQLite when used with FastAPI
+# check_same_thread=False is required for SQLite when used with FastAPI.
+# timeout=30 lets a second writer wait for the lock instead of failing
+# immediately with "database is locked" — APScheduler ingest jobs and
+# request handlers share this engine.
 engine = create_engine(
     settings.database_url,
-    connect_args={"check_same_thread": False},
+    connect_args={"check_same_thread": False, "timeout": 30},
 )
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, _connection_record):
+    """Enable WAL mode on every SQLite connection.
+
+    WAL allows concurrent readers alongside a single writer (vs the
+    default DELETE journal which blocks readers during writes). This is
+    the canonical fix for 'database is locked' errors when multiple
+    workers share a SQLite file. synchronous=NORMAL is the standard WAL
+    pairing — durable enough for the ingest workload, faster than FULL.
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -1,11 +1,10 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas import HealthResponse
+from app.utils.time import to_iso_z, utcnow
 
 router = APIRouter(tags=["health"])
 
@@ -25,5 +24,5 @@ def health_check(response: Response, db: Session = Depends(get_db)):
         status="ok",
         service="flashpoint",
         db_status=db_status,
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=to_iso_z(utcnow()),
     )

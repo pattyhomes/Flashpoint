@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.schemas import EventCreate
 from app.services.ingestion.base import BaseSource
+from app.utils.time import utcnow_naive
 
 # 16 realistic U.S. unrest events grouped into 5 geographic clusters.
 # source_id is deterministic (no timestamp) so the scheduler's dedup works across runs.
@@ -71,7 +72,7 @@ class MockSource(BaseSource):
     source_name = "mock"
 
     def fetch(self) -> list[EventCreate]:
-        now = datetime.utcnow()
+        now = utcnow_naive()
         events = []
         city_counters: dict[str, int] = {}
 

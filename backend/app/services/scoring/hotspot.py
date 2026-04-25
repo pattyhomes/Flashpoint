@@ -10,9 +10,11 @@ Algorithm:
   6. Write cluster_id and trend_state back to each assigned Event.
   7. Write all computed scores back to each Hotspot.
 """
-from datetime import datetime, timedelta
+from datetime import timedelta
 from collections import defaultdict
 import math
+
+from app.utils.time import utcnow_naive
 
 from sqlalchemy.orm import Session
 
@@ -263,7 +265,7 @@ def _status(priority: float, trend: str) -> str:
 
 def compute_hotspots(db: Session) -> None:
     """Derive hotspot clusters from event density and compute all scores."""
-    now = datetime.utcnow()
+    now = utcnow_naive()
 
     # Clear stale assignments so no orphaned state persists across recomputes
     db.query(Event).filter(Event.is_active == True).update(

@@ -4,6 +4,7 @@ from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.utils.time import utcnow_naive
 
 
 class Event(Base):
@@ -31,7 +32,7 @@ class Event(Base):
 
     # Timestamps
     occurred_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    ingested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
     # Source metadata
     source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -108,7 +109,7 @@ class EventSource(Base):
     # Arbitrary extra metadata (JSON string)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
 
 class IngestRun(Base):

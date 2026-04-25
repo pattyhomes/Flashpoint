@@ -14,6 +14,8 @@ import json
 import zipfile
 from datetime import datetime, timedelta
 
+from app.utils.time import utcnow_naive
+
 import httpx
 
 from app.schemas import EventCreate
@@ -89,7 +91,7 @@ def _build_urls(since: datetime | None) -> list[str]:
     uses source_id = "gdelt-{GlobalEventID}".
     """
     BASE = "http://data.gdeltproject.org/gdeltv2/"
-    now = datetime.utcnow()
+    now = utcnow_naive()
     upper = _floor_15(now) - timedelta(minutes=15)
 
     if since is None:

@@ -23,6 +23,7 @@ import httpx
 from app.config import settings
 from app.schemas import EventCreate
 from app.services.ingestion.classifier import classify
+from app.utils.time import utcnow_naive
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -235,7 +236,7 @@ def _precision_passes(precision: str, min_precision: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def _build_request(lookback_hours: int, page: int, count: int) -> dict:
-    now = datetime.utcnow()
+    now = utcnow_naive()
     date_start = (now - timedelta(hours=lookback_hours)).strftime("%Y-%m-%d")
     date_end = now.strftime("%Y-%m-%d")
 
@@ -312,7 +313,7 @@ def _normalize_article(
         else:
             occurred_at = datetime.strptime(date_str[:10], "%Y-%m-%d").replace(hour=12)
     except (ValueError, TypeError):
-        occurred_at = datetime.utcnow()
+        occurred_at = utcnow_naive()
 
     # Source info
     source_obj = article.get("source") or {}

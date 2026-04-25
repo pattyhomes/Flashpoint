@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 
 from app.config import settings
 from app.database import SessionLocal
@@ -11,6 +10,7 @@ from app.services.ingestion.deduper import (
 )
 from app.services.ingestion.mock_source import MockSource
 from app.services.scoring.hotspot import compute_hotspots
+from app.utils.time import utcnow_naive as utcnow
 
 
 def run_mock_ingestion():
@@ -23,7 +23,7 @@ def run_mock_ingestion():
     db = SessionLocal()
 
     # Commit the run record before ingestion begins so it survives any failure.
-    run = IngestRun(started_at=datetime.utcnow(), status="running", ingest_source="mock")
+    run = IngestRun(started_at=utcnow(), status="running", ingest_source="mock")
     db.add(run)
     db.commit()
     db.refresh(run)
@@ -39,7 +39,7 @@ def run_mock_ingestion():
         db.commit()
 
         run.status = "success"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utcnow()
         run.events_inserted = inserted
         db.commit()
         print(f"[seed] Inserted {inserted} new mock events.")
@@ -48,7 +48,7 @@ def run_mock_ingestion():
         db.rollback()  # undoes uncommitted event inserts; the IngestRun commit above is unaffected
         run = db.get(IngestRun, run_id)
         run.status = "failed"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utcnow()
         run.error_message = str(e)[:1000]
         db.commit()
         print(f"[seed] Error: {e}")
@@ -64,7 +64,7 @@ def run_gdelt_ingestion():
 
     db = SessionLocal()
 
-    run = IngestRun(started_at=datetime.utcnow(), status="running", ingest_source="gdelt")
+    run = IngestRun(started_at=utcnow(), status="running", ingest_source="gdelt")
     db.add(run)
     db.commit()
     db.refresh(run)
@@ -91,7 +91,7 @@ def run_gdelt_ingestion():
         db.commit()
 
         run.status = "success"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utcnow()
         run.events_inserted = inserted
         db.commit()
         print(f"[gdelt] Inserted {inserted} new events.")
@@ -100,7 +100,7 @@ def run_gdelt_ingestion():
         db.rollback()  # undoes uncommitted event inserts; the IngestRun commit above is unaffected
         run = db.get(IngestRun, run_id)
         run.status = "failed"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utcnow()
         run.error_message = str(e)[:1000]
         db.commit()
         print(f"[gdelt] Error: {e}")
@@ -130,7 +130,7 @@ def run_eventregistry_ingestion():
     db = SessionLocal()
 
     run = IngestRun(
-        started_at=datetime.utcnow(),
+        started_at=utcnow(),
         status="running",
         ingest_source="eventregistry",
     )
@@ -266,7 +266,7 @@ def run_eventregistry_ingestion():
 
         run = db.get(IngestRun, run_id)
         run.status = "success"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utcnow()
         run.events_inserted = inserted
         db.commit()
 
@@ -280,7 +280,7 @@ def run_eventregistry_ingestion():
         db.rollback()
         run = db.get(IngestRun, run_id)
         run.status = "failed"
-        run.finished_at = datetime.utcnow()
+        run.finished_at = utcnow()
         run.error_message = str(e)[:1000]
         db.commit()
         print(f"[eventregistry] Error: {e}")

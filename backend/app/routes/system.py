@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -8,6 +6,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import Event, Hotspot, IngestRun
 from app.schemas import SystemStatusResponse
+from app.utils.time import to_utc, utcnow, utcnow_naive
 
 router = APIRouter(prefix="/system", tags=["system"])
 
@@ -44,7 +43,7 @@ def system_status(db: Session = Depends(get_db)):
     stale_threshold = settings.ingestion_interval_seconds * 2
     is_stale = (
         last_success_at is None
-        or (datetime.utcnow() - last_success_at).total_seconds() > stale_threshold
+        or (utcnow() - to_utc(last_success_at)).total_seconds() > stale_threshold
     )
 
     # last_error: only expose if the most recent run failed
@@ -60,6 +59,6 @@ def system_status(db: Session = Depends(get_db)):
         last_success_at=last_success_at,
         last_run_status=last_run.status if last_run else None,
         last_error=last_error,
-        generated_at=datetime.utcnow(),
+        generated_at=utcnow_naive(),
         db_path=settings.database_url,
     )

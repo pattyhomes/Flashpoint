@@ -20,7 +20,7 @@
 
 Flashpoint is a single-operator intelligence dashboard that aggregates, classifies, deduplicates, and visualizes U.S. protest and civil disruption events in near real time. It runs as a fullscreen native desktop application — designed to live permanently on a **Raspberry Pi 5 with a 7-inch touchscreen**, feeling like a real piece of installed equipment rather than a website.
 
-The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs each article through a **deterministic NLP classifier**, deduplicates across sources with a **6-rule syndication detector**, builds **multi-source corroborated confidence scores**, clusters events into geographic hotspots with **greedy radius clustering and proximity-weighted naming**, and serves everything through a **FastAPI backend + React/MapLibre GL dashboard**, embedded in a PySide6/PyQt5 Qt shell with zero browser chrome.
+The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs each article through a **deterministic NLP classifier**, deduplicates across sources with a **6-rule syndication detector**, builds **multi-source corroborated confidence scores**, clusters events into geographic hotspots with **greedy radius clustering and proximity-weighted naming**, and serves everything through a **FastAPI backend + React/MapLibre GL dashboard**, embedded in a PySide6/PyQt6 Qt shell with zero browser chrome.
 
 <!-- SCREENSHOT: Add a screenshot of the running dashboard here.
      Suggested: `docs/screenshot.png` — capture the map with hotspot markers,
@@ -76,7 +76,7 @@ graph TD
         SB[Status Bar]
     end
 
-    subgraph "Desktop Shell — PySide6 / PyQt5"
+    subgraph "Desktop Shell — PySide6 / PyQt6"
         QW[QWebEngineView]
         HP[Health Poller<br/>QThread]
         OV[Native Overlay<br/>CONNECTING → READY]
@@ -110,7 +110,7 @@ Pi boots → auto-login (pi user)
   │           └── serves frontend/dist/ as static files
   │
   └── XDG autostart → pi_start.sh → python -m desktop.app.main
-        └── PySide6 / PyQt5 fullscreen window
+        └── PySide6 / PyQt6 fullscreen window
               ├── QWebEngineView  →  http://127.0.0.1:8000
               └── HealthPoller (QThread, polls /api/v1/health)
                     CONNECTING → LOADING_WEBVIEW → READY
@@ -130,8 +130,8 @@ Pi boots → auto-login (pi user)
 | **Frontend** | React 19, Vite 8 | No external state library |
 | **Map** | MapLibre GL 5.21 | CARTO Dark Matter basemap |
 | **Desktop (Mac)** | PySide6 6.6+ | pip-installed |
-| **Desktop (Pi)** | PyQt5 (system packages) | `python3-pyqt5.qtwebengine` via apt |
-| **Qt compat layer** | `desktop/app/qt_compat.py` | Tries PySide6, falls back to PyQt5 |
+| **Desktop (Pi)** | PyQt6 (system packages) | `python3-pyqt6.qtwebengine` via apt — PyQt5 crashes on RPi 5 16KB pages (commit 33e08b9) |
+| **Qt compat layer** | `desktop/app/qt_compat.py` | Tries PyQt6, then PySide6, then PyQt5 (legacy fallback) |
 | **Pi OS** | Raspberry Pi OS 64-bit Bookworm | systemd user service + XDG autostart |
 | **Testing** | pytest | 106 tests, zero external calls |
 
@@ -232,7 +232,7 @@ Flashpoint/
 │
 ├── desktop/
 │   └── app/
-│       ├── qt_compat.py             # PySide6/PyQt5 compatibility layer
+│       ├── qt_compat.py             # PyQt6/PySide6/PyQt5 compatibility layer
 │       ├── config.py                # Runtime constants (ports, timeouts, Pi flags)
 │       ├── launcher.py              # Subprocess orchestrator (dev path)
 │       ├── main.py                  # Entry point: python -m desktop.app.main
@@ -418,14 +418,15 @@ cd frontend && npm run lint
 
 ```bash
 # On the Pi (Raspberry Pi OS 64-bit Bookworm with desktop)
-sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine
+sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine
 sudo apt install nodejs npm    # or use nvm
 
 # Clone the repo and set up
 git clone https://github.com/pattyhomes/Flashpoint.git ~/Flashpoint
 cd ~/Flashpoint
 
-# Create venv with system-site-packages (required for system PyQt5)
+# Create venv with system-site-packages (required for system PyQt6;
+# PyQt5 crashes on RPi 5 16KB pages — see commit 33e08b9)
 python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 pip install -e .

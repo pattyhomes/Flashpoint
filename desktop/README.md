@@ -16,7 +16,7 @@ selected surfaces (status bar, startup screen, settings) will move to native Qt 
 The map and event feed will remain web-rendered.
 
 ```
-Qt Shell (fullscreen)  — PySide6 on Mac, PyQt5 on Pi
+Qt Shell (fullscreen)  — PySide6 on Mac, PyQt6 on Pi
 └── QWebEngineView ← React/Vite frontend (localhost:5178 in orchestrated dev)
                        └── /api/* proxied to FastAPI backend (localhost:8001)
 ```
@@ -25,16 +25,17 @@ Qt Shell (fullscreen)  — PySide6 on Mac, PyQt5 on Pi
 
 ## Platform Dependencies
 
-The shell imports Qt through `desktop/app/qt_compat.py`, which tries PySide6 first and
-falls back to PyQt5. This splits cleanly by platform:
+The shell imports Qt through `desktop/app/qt_compat.py`, which tries PyQt6 first
+(Pi), then PySide6 (Mac), then PyQt5 (legacy fallback only — PyQt5 crashes on RPi 5
+16KB pages, see commit 33e08b9). This splits cleanly by platform:
 
 | Platform | Qt binding | How to install |
 |---|---|---|
 | **Mac** | PySide6 (pip) | `pip install -r desktop/requirements.txt` |
-| **Raspberry Pi OS** | PyQt5 (system) | `sudo apt install python3-pyqt5 python3-pyqt5.qtwebengine` |
+| **Raspberry Pi OS** | PyQt6 (system) | `sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine` |
 
 **Pi venv requirement:** Must be created with `--system-site-packages` so Python can see
-the system-installed PyQt5. See `deploy/pi/README.md` for the full Pi setup. Do NOT run
+the system-installed PyQt6. See `deploy/pi/README.md` for the full Pi setup. Do NOT run
 `pip install -r desktop/requirements.txt` on Pi — it would install PySide6, which has a
 library ABI mismatch on Bookworm.
 

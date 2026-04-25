@@ -55,6 +55,17 @@ if [ ! -f "$REPO_ROOT/.env" ]; then
     exit 1
 fi
 
+# Hard-fail: the Pi backend serves frontend/dist/ as static files. Without it
+# the shell will boot to "Could not load the frontend" — Desktop PRD §23
+# requires the install path to be reproducible from a fresh checkout.
+if [ ! -f "$REPO_ROOT/frontend/dist/index.html" ]; then
+    echo "Error: frontend/dist/index.html not found at $REPO_ROOT/frontend/dist/index.html"
+    echo "The Pi backend serves the built frontend as static files. Build it first:"
+    echo "  cd frontend && npm install && npm run build"
+    echo "See deploy/pi/README.md (Prerequisites) for full setup instructions."
+    exit 1
+fi
+
 # ── Install systemd user service ──────────────────────────────────────────────
 
 SERVICE_SRC="$SCRIPT_DIR/flashpoint-backend.service"
@@ -143,9 +154,4 @@ else
     echo
     echo "4. The desktop autostart entry takes effect on next login."
     echo "   Log out and back in (or reboot) to test."
-    echo
-    echo "Note: Ensure frontend/dist/ is built before starting the backend."
-    echo "  cd frontend && npm run build"
-    echo "If not built, the backend serves the API only and the shell will show"
-    echo "'Could not load the frontend'. See deploy/pi/README.md for details."
 fi

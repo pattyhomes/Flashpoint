@@ -197,22 +197,27 @@ exits silently rather than opening a second window.
 
 ## Known Gaps
 
-### Frontend delivery — resolved at code level, hardware not yet validated
+### Frontend delivery — done
 
-The backend now serves `frontend/dist/` as static files via FastAPI `StaticFiles`. The
+The backend serves `frontend/dist/` as static files via FastAPI `StaticFiles`. The
 shell's `FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000` (set by `pi_start.sh`) points
-at the backend root. This path is implemented and Mac-validated.
+at the backend root. The build step is now hard-required by `deploy/pi/install.sh` —
+running the installer without `frontend/dist/index.html` exits 1 with the exact
+`cd frontend && npm install && npm run build` instruction.
 
-**Remaining requirement:** `frontend/dist/` must be built before the backend starts.
-See the "Build the frontend" step in Prerequisites above. If the build is missing, the
-backend warns at startup and the shell shows "Could not load the frontend" — the existing
-graceful degradation path.
+### Hardware validation — done
 
-### Hardware validation not yet done
+Boot → READY confirmed end-to-end on Raspberry Pi 5 hardware. PyQt6 is the required
+binding (PyQt5 crashes on RPi 5 16KB pages — see commit 33e08b9).
 
-This scaffolding and the frontend delivery path have been reviewed for correctness on Mac
-but have not been tested on Pi hardware. The boot → READY flow is implemented but not
-verified end-to-end on physical hardware.
+### Remaining polish (not blocking)
+
+- **Portrait / touch tuning.** `FLASHPOINT_PORTRAIT` is defined as a seam in
+  `desktop/app/config.py` but not yet wired to window geometry or rotation. Touch-event
+  handling has not been hardened for the Pi Touch Display 2.
+- **Screen blanking control.** No `xset` / display-power-management integration yet.
+  The Pi will follow whatever blanking policy is configured at the OS level.
+- **Auto-login.** Still a manual `raspi-config` step — see "Configuring Auto-Login" above.
 
 ---
 
@@ -240,7 +245,7 @@ systemctl --user daemon-reload
 |---|---|---|
 | `FLASHPOINT_MANAGED` | `1` | Launcher skips subprocess management; backend is from systemd |
 | `FLASHPOINT_FULLSCREEN` | `1` | Shell opens fullscreen (`showFullScreen()`) |
-| `FLASHPOINT_DEV_QUIT` | `0` | Custom `QShortcut` (Ctrl+Q) not registered |
+| `FLASHPOINT_DEV_QUIT` | `1` | Show on-screen close button + Ctrl+Q shortcut (Pi has no WM chrome — without these the operator cannot quit the shell) |
 | `FLASHPOINT_BACKEND_HEALTH_URL` | `http://127.0.0.1:8000/api/v1/health` | Explicit IPv4 — avoids `localhost`→`::1` ambiguity |
 | `FLASHPOINT_FRONTEND_URL` | `http://127.0.0.1:8000` | Backend serves frontend/dist/ at root — same host:port |
 

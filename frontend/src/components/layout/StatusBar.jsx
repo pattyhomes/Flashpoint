@@ -1,6 +1,6 @@
 import { parseUTC, relativeTimeAgo } from '../../utils/time'
 
-export default function StatusBar({ lastUpdated, loading, systemStatus }) {
+export default function StatusBar({ lastUpdated, loading, systemStatus, lastPollFailed }) {
   // parseUTC handles naive UTC strings from the backend (no 'Z' suffix).
   const successAt  = parseUTC(systemStatus?.last_success_at)
   const computedAt = parseUTC(systemStatus?.last_computed_at)
@@ -47,6 +47,12 @@ export default function StatusBar({ lastUpdated, loading, systemStatus }) {
                 <span className="status-bar__badge status-bar__badge--syncing">
                   <span className="status-bar__badge-dot" />
                   SYNCING
+                </span>
+              )}
+              {lastPollFailed && (
+                <span className="status-bar__badge status-bar__badge--stale">
+                  <span className="status-bar__badge-dot" />
+                  SERVED FROM CACHE
                 </span>
               )}
             </span>

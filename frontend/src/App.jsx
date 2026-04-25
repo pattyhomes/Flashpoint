@@ -20,6 +20,11 @@ export default function App() {
   const [loading, setLoading]         = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [systemStatus, setSystemStatus] = useState(null)
+  // Desktop PRD §26 — when a poll fails we keep the last-good hotspots/priorities/
+  // status in state (the existing .catch never overwrites them) and surface a
+  // "served from cache" indicator so the operator knows the displayed snapshot
+  // is not the freshest available read.
+  const [lastPollFailed, setLastPollFailed] = useState(false)
 
   const [selectedItem, setSelectedItem] = useState(null)
   const [hotspotDetail, setHotspotDetail]               = useState(null)
@@ -60,6 +65,7 @@ export default function App() {
           setPriorities(pr)
           setSystemStatus(status)
           setLastUpdated(new Date())
+          setLastPollFailed(false)
 
           // Reconcile selection: if a hotspot is selected, check it still exists.
           // selectedItemRef.current is kept in sync via a separate effect below.
@@ -76,7 +82,12 @@ export default function App() {
             }
           }
         })
-        .catch(err => console.error('[Flashpoint] poll error:', err))
+        .catch(err => {
+          console.error('[Flashpoint] poll error:', err)
+          // Do NOT clear hotspots/priorities/systemStatus — Desktop PRD §26
+          // requires the UI to keep showing last-known data on feed failure.
+          setLastPollFailed(true)
+        })
     }, 60_000)
 
     return () => clearInterval(pollId)
@@ -315,7 +326,7 @@ export default function App() {
         />
       }
       status={
-        <StatusBar lastUpdated={lastUpdated} loading={loading} systemStatus={systemStatus} />
+        <StatusBar lastUpdated={lastUpdated} loading={loading} systemStatus={systemStatus} lastPollFailed={lastPollFailed} />
       }
     />
   )

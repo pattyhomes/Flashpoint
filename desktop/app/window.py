@@ -16,7 +16,11 @@ native Qt widgets. The map and feed will remain web-rendered.
 
 See desktop/README.md for the full transitional-architecture rationale.
 """
+import logging
 import os
+import time
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from urllib.request import urlopen
 
 from desktop.app import config
@@ -62,8 +66,33 @@ FRONTEND_URL = os.environ.get(
 )
 
 
+# ---------------------------------------------------------------------------
+# Logging — Desktop PRD §27 requires shell launch logs, backend readiness
+# timing, web-view load failures, and autostart diagnostics. On Pi, XDG
+# autostart discards stdout, so we route everything through a rotating file
+# handler at ~/.flashpoint/shell.log (5 MB cap, 3 backups). Stdout is kept
+# as a second handler so dev runs still see output in the terminal.
+# ---------------------------------------------------------------------------
+
+_LOG_DIR = Path.home() / ".flashpoint"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+_logger = logging.getLogger("flashpoint.shell")
+_logger.setLevel(logging.INFO)
+_logger.propagate = False
+if not _logger.handlers:
+    _file_handler = RotatingFileHandler(
+        _LOG_DIR / "shell.log", maxBytes=5_000_000, backupCount=3,
+    )
+    _stream_handler = logging.StreamHandler()
+    _fmt = logging.Formatter("%(asctime)s [shell] %(message)s")
+    for _h in (_file_handler, _stream_handler):
+        _h.setFormatter(_fmt)
+        _logger.addHandler(_h)
+
+
 def _log(msg: str) -> None:
-    print(f"[shell] {msg}", flush=True)
+    _logger.info(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -290,8 +319,10 @@ class MainWindow(QMainWindow):
             self._close_btn = btn
 
         self._poller: _HealthPoller | None = None
+        self._connect_started_at: float | None = None
 
         # Boot into connecting state
+        _log(f"Shell starting (backend={BACKEND_HEALTH_URL}, frontend={FRONTEND_URL})")
         self._start_connecting()
 
     # ── State transitions ──────────────────────────────────────────────────
@@ -301,6 +332,8 @@ class MainWindow(QMainWindow):
         self._overlay.set_connecting()
         self._stack.setCurrentIndex(0)
         self._stop_poller()
+        self._connect_started_at = time.monotonic()
+        _log("CONNECTING start")
         self._poller = _HealthPoller()
         self._poller.ready.connect(self._on_backend_ready)
         self._poller.unavailable.connect(self._on_backend_unavailable)
@@ -308,7 +341,12 @@ class MainWindow(QMainWindow):
 
     def _on_backend_ready(self) -> None:
         """Backend health passed → start loading the web UI."""
-        _log(f"Backend ready — loading frontend: {FRONTEND_URL}")
+        elapsed = (
+            time.monotonic() - self._connect_started_at
+            if self._connect_started_at is not None
+            else 0.0
+        )
+        _log(f"Backend READY in {elapsed:.2f}s — loading frontend: {FRONTEND_URL}")
         # Keep the overlay visible while the webview loads (avoids flash of blank)
         self._overlay.set_connecting()
         self._webview.setUrl(QUrl(FRONTEND_URL))
@@ -332,6 +370,12 @@ class MainWindow(QMainWindow):
 
     def _on_backend_unavailable(self) -> None:
         """Health poller exhausted its retry budget."""
+        elapsed = (
+            time.monotonic() - self._connect_started_at
+            if self._connect_started_at is not None
+            else 0.0
+        )
+        _log(f"Backend UNAVAILABLE after {elapsed:.2f}s")
         self._overlay.set_unavailable("Backend not responding")
         self._stack.setCurrentIndex(0)
 

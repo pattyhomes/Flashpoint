@@ -79,6 +79,18 @@ This starts backend (port 8001), frontend dev server (port 5178), and the PySide
 shell together. Readiness is verified before each step. All processes clean up when
 the shell exits.
 
+For fullscreen kiosk testing on a desktop display:
+
+```bash
+bash scripts/run_kiosk.sh
+```
+
+`run_kiosk.sh` keeps the normal dev orchestration but exports
+`FLASHPOINT_FULLSCREEN=1`, so the Qt shell opens fullscreen with no browser or
+window chrome. This is the same fullscreen mechanism used by the Pi autostart
+path; Flashpoint does not use Electron or Chromium kiosk mode as its primary
+runtime.
+
 **Quit:** `Command+Q` (macOS) / `Ctrl+Q` (Windows/Linux) in the shell window, or `Ctrl+C` in the terminal.
 
 ---
@@ -179,7 +191,7 @@ for the full setup guide, boot flow, and known gaps.
 - Backend runs as a systemd user service (`flashpoint-backend.service`)
 - Shell autostarts via XDG autostart (`flashpoint.desktop` → `scripts/pi_start.sh`)
 - `scripts/pi_start.sh` sets `FLASHPOINT_MANAGED=1`, `FLASHPOINT_FULLSCREEN=1`,
-  `FLASHPOINT_DEV_QUIT=0`, `FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health`,
+  `FLASHPOINT_DEV_QUIT=1`, `FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health`,
   and `FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000`
 - Install with: `bash deploy/pi/install.sh`
 
@@ -192,9 +204,9 @@ See `deploy/pi/README.md` Prerequisites for build instructions.
 
 | Milestone | Status |
 |---|---|
-| Frontend delivery for Pi | Implemented, Mac-validated — hardware validation pending |
-| Hardware validation | Boot → READY flow not yet tested on Pi hardware |
-| Portrait / touch | Wire `FLASHPOINT_PORTRAIT=1` to window geometry; touch-friendly Qt event handling |
+| Frontend delivery for Pi | Implemented and validated |
+| Hardware validation | Boot → READY confirmed on Raspberry Pi 5 |
+| Portrait / touch | Non-map UI shields map gestures; `FLASHPOINT_PORTRAIT` geometry/rotation still future work |
 | Native surfaces | Replace overlay widget → richer native startup screen (Milestone C) |
 
 ---

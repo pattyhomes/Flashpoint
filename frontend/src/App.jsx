@@ -249,21 +249,29 @@ export default function App() {
   // Clear selection when the selected item is filtered out
   useEffect(() => {
     if (!selectedItem) return
+    let canceled = false
     if (selectedItem.type === 'event') {
       if (!filteredEvents.find(e => e.id === selectedItem.data.id)) {
-        pendingEventId.current = null
-        setSelectedItem(null)
-        setEventDetail(null)
-        setEventDetailLoading(false)
+        queueMicrotask(() => {
+          if (canceled) return
+          pendingEventId.current = null
+          setSelectedItem(null)
+          setEventDetail(null)
+          setEventDetailLoading(false)
+        })
       }
     } else {
       if (!filteredHotspots.find(h => h.id === selectedItem.data.id)) {
-        pendingHotspotId.current = null
-        setSelectedItem(null)
-        setHotspotDetail(null)
-        setHotspotDetailLoading(false)
+        queueMicrotask(() => {
+          if (canceled) return
+          pendingHotspotId.current = null
+          setSelectedItem(null)
+          setHotspotDetail(null)
+          setHotspotDetailLoading(false)
+        })
       }
     }
+    return () => { canceled = true }
   }, [filteredEvents, filteredHotspots, selectedItem])
 
   return (

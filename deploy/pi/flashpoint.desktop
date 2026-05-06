@@ -2,7 +2,7 @@
 Type=Application
 Name=Flashpoint
 Comment=Flashpoint unrest monitoring shell — autostart on login
-# Runs in Pi-managed mode: fullscreen, dev quit shortcut disabled.
+# Runs in Pi-managed mode: fullscreen, with the Pi shell's explicit quit affordances.
 # Backend is expected to be running as the flashpoint-backend systemd user service.
 # Repo path is substituted by deploy/pi/install.sh — do not edit the installed copy.
 Exec=bash __REPO_ROOT__/scripts/pi_start.sh

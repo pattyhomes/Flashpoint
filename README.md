@@ -166,6 +166,16 @@ bash scripts/run.sh
 
 `scripts/run.sh` starts the backend (port 8001), frontend dev server (port 5178), and the PySide6 desktop shell in a single command. Press `Command+Q` (macOS) to quit.
 
+For a fullscreen kiosk-style dev run with no window chrome, use the Qt shell kiosk launcher:
+
+```bash
+bash scripts/run_kiosk.sh
+```
+
+This uses the same backend/frontend orchestration as `scripts/run.sh`, but exports
+`FLASHPOINT_FULLSCREEN=1`. The Raspberry Pi autostart path already uses the same
+fullscreen shell mode through `scripts/pi_start.sh`.
+
 ### Individual services
 
 ```bash

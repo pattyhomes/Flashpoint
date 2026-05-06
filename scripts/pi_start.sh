@@ -48,6 +48,15 @@ export FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health
 # Backend serves the built frontend at root — same host:port as the API
 export FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000
 
+# Raspberry Pi OS's wf-panel reserves a top work area under labwc/Xwayland, which
+# makes Qt "fullscreen" start below the desktop bar. For appliance mode, stop the
+# panel respawner and panel before launching the shell. Set FLASHPOINT_HIDE_PANEL=0
+# for maintenance sessions where the desktop panel should stay visible.
+if [ "${FLASHPOINT_HIDE_PANEL:-1}" != "0" ]; then
+    pkill -f "lwrespawn /usr/bin/wf-panel-pi" 2>/dev/null || true
+    pkill -x wf-panel-pi 2>/dev/null || true
+fi
+
 # QtWebEngine Chromium subprocess flags — required for system Qt6 on Pi.
 # --disable-gpu-compositing: disables GPU page compositing (which fails on
 # VideoCore VII) while leaving the WebGL context available. MapLibre GL JS

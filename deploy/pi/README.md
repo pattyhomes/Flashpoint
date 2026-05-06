@@ -212,9 +212,12 @@ binding (PyQt5 crashes on RPi 5 16KB pages — see commit 33e08b9).
 
 ### Remaining polish (not blocking)
 
-- **Portrait / touch tuning.** `FLASHPOINT_PORTRAIT` is defined as a seam in
-  `desktop/app/config.py` but not yet wired to window geometry or rotation. Touch-event
-  handling has not been hardened for the Pi Touch Display 2.
+- **Portrait / touch tuning.** The Pi Touch Display 2 uses a rotated DSI output
+  (`wlr-randr` transform `270`). If touch input lands in the wrong place, run
+  `bash scripts/pi_fix_touch.sh` and reboot; it installs the Goodix/libinput
+  calibration matrix used by the kiosk display. `FLASHPOINT_PORTRAIT` remains a
+  named seam in `desktop/app/config.py` but is not yet wired to window geometry
+  or rotation.
 - **Screen blanking control.** No `xset` / display-power-management integration yet.
   The Pi will follow whatever blanking policy is configured at the OS level.
 - **Auto-login.** Still a manual `raspi-config` step — see "Configuring Auto-Login" above.

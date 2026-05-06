@@ -6,7 +6,7 @@ const STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 const US_CENTER = [-98, 38.5]
 const US_ZOOM   = 3.8
 
-function severityColor(score) {
+function severityColor() {
   // Matches the shell's severity scale
   return ['step', ['get', 'severity_score'],
     '#22c55e', 0.4,
@@ -59,9 +59,10 @@ export default function MapPanel({ events = [], hotspots = [], selectedItem, onS
   const eventsRef    = useRef(events)
   const hotspotsRef  = useRef(hotspots)
   const onSelectRef  = useRef(onSelect)
-  eventsRef.current   = events
-  hotspotsRef.current = hotspots
-  onSelectRef.current = onSelect
+
+  useEffect(() => { eventsRef.current = events }, [events])
+  useEffect(() => { hotspotsRef.current = hotspots }, [hotspots])
+  useEffect(() => { onSelectRef.current = onSelect }, [onSelect])
 
   // ── Initialize map once ──────────────────────────────────────────────────
   useEffect(() => {
@@ -209,7 +210,7 @@ export default function MapPanel({ events = [], hotspots = [], selectedItem, onS
       mapRef.current  = null
       loadedRef.current = false
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // ── Sync filtered events ─────────────────────────────────────────────────
   useEffect(() => {

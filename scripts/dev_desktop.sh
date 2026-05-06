@@ -6,7 +6,8 @@
 #   Terminal 2: cd frontend && npm run dev
 #
 # The shell polls the backend health endpoint, then loads the frontend
-# (http://localhost:5173) inside a fullscreen QWebEngineView.
+# (http://localhost:5173) inside QWebEngineView. Export
+# FLASHPOINT_FULLSCREEN=1, or use scripts/run_kiosk.sh, for fullscreen.
 #
 # Quit: Command+Q (macOS) / Ctrl+Q (Windows/Linux)
 set -e

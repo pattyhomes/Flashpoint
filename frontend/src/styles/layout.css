@@ -10,6 +10,7 @@
   height: 100vh;
   width: 100vw;
   overflow: hidden;
+  isolation: isolate;
 }
 
 .shell__left {
@@ -18,6 +19,10 @@
   border-right: 1px solid var(--surface-border);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+  touch-action: pan-y;
 }
 
 .shell__map {
@@ -25,6 +30,8 @@
   background: var(--surface-0);
   position: relative;
   overflow: hidden;
+  z-index: 0;
+  pointer-events: auto;
 }
 
 .shell__right {
@@ -34,6 +41,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+  touch-action: pan-y;
 }
 
 .shell__bottom {
@@ -43,10 +54,29 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+  touch-action: pan-y;
 }
 
 .shell__status {
   grid-area: status;
   background: var(--surface-2);
   border-top: 1px solid var(--surface-border);
+  position: relative;
+  z-index: 20;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+[data-map-overlay],
+[data-map-overlay] * {
+  pointer-events: auto;
+}
+
+[data-map-overlay] button,
+[data-map-overlay] a,
+[data-map-overlay] [role='button'] {
+  touch-action: manipulation;
 }

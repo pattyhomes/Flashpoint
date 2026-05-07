@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -110,6 +110,70 @@ class EventSource(Base):
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+
+
+class EvidenceItem(Base):
+    """Raw source evidence captured before it becomes an event.
+
+    Evidence is the provenance layer for weak leads, context alerts, and
+    corroborating source records. Events remain the confirmed/synthesized layer.
+    """
+    __tablename__ = "evidence_items"
+    __table_args__ = (
+        UniqueConstraint("source_type", "source_record_id", name="uq_evidence_source_record"),
+        UniqueConstraint("source_type", "content_hash", name="uq_evidence_source_hash"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source_record_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    source_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    source_title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    trust_tier: Mapped[str] = mapped_column(String(32), nullable=False, default="weak")
+    raw_payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class Observation(Base):
+    """Candidate intelligence extracted from evidence.
+
+    Observations can be weak leads, context records, linked corroboration, or
+    promoted events. Only linked/promoted observations can affect Event/Hotspot
+    state.
+    """
+    __tablename__ = "observations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    evidence_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="lead", index=True)
+    candidate_event_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    country: Mapped[str] = mapped_column(String(64), nullable=False, default="US")
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    location_precision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    severity_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+
+    linked_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    promoted_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
 
 
 class IngestRun(Base):

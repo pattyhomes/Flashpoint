@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from app.database import engine, init_db
 from app.jobs.scheduler import start_scheduler, stop_scheduler
-from app.routes import events, health, hotspots, priorities, system
+from app.routes import events, health, hotspots, observations, priorities, system
 
 
 def _migrate():
@@ -53,6 +53,7 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
+app.include_router(observations.router, prefix="/api/v1")
 app.include_router(hotspots.router, prefix="/api/v1")
 app.include_router(priorities.router, prefix="/api/v1")
 app.include_router(system.router, prefix="/api/v1")

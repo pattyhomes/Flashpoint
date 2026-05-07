@@ -81,6 +81,47 @@ class EventDetailOut(EventOut):
     sources: list[EventSourceOut] = []
 
 
+class EvidenceItemOut(BaseModel):
+    id: int
+    source_type: str
+    source_record_id: str | None
+    source_url: str | None
+    source_name: str | None
+    source_title: str | None
+    excerpt: str | None
+    published_at: datetime | None
+    fetched_at: datetime
+    content_hash: str
+    trust_tier: str
+
+    model_config = {"from_attributes": True}
+
+
+class ObservationOut(BaseModel):
+    id: int
+    evidence_id: int
+    status: str
+    candidate_event_type: str | None
+    title: str
+    summary: str | None
+    city: str | None
+    state: str | None
+    country: str
+    latitude: float | None
+    longitude: float | None
+    location_precision: str | None
+    observed_at: datetime | None
+    confidence_score: float
+    severity_score: float
+    linked_event_id: int | None
+    promoted_event_id: int | None
+    created_at: datetime
+    updated_at: datetime
+    evidence: EvidenceItemOut | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class HotspotOut(BaseModel):
     id: int
     name: str | None

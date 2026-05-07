@@ -10,7 +10,7 @@ Algorithm:
   6. Write cluster_id and trend_state back to each assigned Event.
   7. Write all computed scores back to each Hotspot.
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 from collections import defaultdict
 import math
 

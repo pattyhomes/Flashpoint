@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.models import Event, EventSource, EvidenceItem, Observation
+from app.services.ai_embeddings import embed_text
 from app.utils.time import utcnow_naive as utcnow
 
 
@@ -80,6 +81,7 @@ def record_evidence(
         published_at=published_at,
         content_hash=content_hash,
         trust_tier=trust_tier,
+        embedding_json=embed_text(" ".join(part for part in [source_title, excerpt] if part)),
         raw_payload_json=payload_json,
     )
     db.add(item)

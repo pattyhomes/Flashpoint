@@ -2,7 +2,7 @@ import json
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models import Event, EventSource, Hotspot, IngestRun
+from app.models import Event, EventSource, Hotspot, IngestRun, Observation
 from app.services.ingestion.deduper import (
     find_matching_event,
     is_duplicate,
@@ -416,6 +416,83 @@ def run_eventregistry_ingestion():
         run.error_message = str(e)[:1000]
         db.commit()
         print(f"[eventregistry] Error: {e}")
+    finally:
+        db.close()
+
+
+def run_observation_source_ingestion(source_name: str):
+    """Fetch weak/context observation sources into the review queue.
+
+    These sources never create Events directly. They only write EvidenceItem and
+    Observation rows for operator review or contextual awareness.
+    """
+    source_map = {
+        "nws": ("nws", lambda: __import__("app.services.ingestion.nws_source", fromlist=["NwsAlertsSource"]).NwsAlertsSource()),
+        "bluesky": ("bluesky", lambda: __import__("app.services.ingestion.bluesky_source", fromlist=["BlueskySource"]).BlueskySource()),
+        "mastodon": ("mastodon", lambda: __import__("app.services.ingestion.mastodon_source", fromlist=["MastodonSource"]).MastodonSource()),
+        "acled": ("acled", lambda: __import__("app.services.ingestion.acled_source", fromlist=["AcledSource"]).AcledSource()),
+    }
+    if source_name not in source_map:
+        raise ValueError(f"Unknown observation source: {source_name}")
+
+    ingest_source, factory = source_map[source_name]
+    db = SessionLocal()
+    run = IngestRun(started_at=utcnow(), status="running", ingest_source=ingest_source)
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    run_id = run.id
+
+    try:
+        candidates = factory().fetch()
+        before_count = db.query(Observation).count()
+        for candidate in candidates:
+            evidence = record_evidence(
+                db,
+                source_type=candidate.source_type,
+                source_record_id=candidate.source_record_id,
+                source_url=candidate.source_url,
+                source_name=candidate.source_name,
+                source_title=candidate.source_title,
+                excerpt=candidate.excerpt,
+                published_at=candidate.published_at,
+                trust_tier=candidate.trust_tier,
+                raw_payload=candidate.raw_payload,
+            )
+            record_observation(
+                db,
+                evidence=evidence,
+                status=candidate.status,
+                title=candidate.title,
+                summary=candidate.summary,
+                candidate_event_type=candidate.candidate_event_type,
+                latitude=candidate.latitude,
+                longitude=candidate.longitude,
+                city=candidate.city,
+                state=candidate.state,
+                country=candidate.country,
+                observed_at=candidate.observed_at,
+                confidence_score=candidate.confidence_score,
+                severity_score=candidate.severity_score,
+                location_precision=candidate.location_precision,
+            )
+
+        db.commit()
+        inserted = db.query(Observation).count() - before_count
+        run = db.get(IngestRun, run_id)
+        run.status = "success"
+        run.finished_at = utcnow()
+        run.events_inserted = inserted
+        db.commit()
+        print(f"[{ingest_source}] Recorded {inserted} observation(s).")
+    except Exception as e:
+        db.rollback()
+        run = db.get(IngestRun, run_id)
+        run.status = "failed"
+        run.finished_at = utcnow()
+        run.error_message = str(e)[:1000]
+        db.commit()
+        print(f"[{ingest_source}] Error: {e}")
     finally:
         db.close()
 

@@ -34,5 +34,35 @@ class Settings(BaseSettings):
     event_registry_max_new_events_per_run: int = 10
     event_registry_max_confidence_uncorroborated: float = 0.58
 
+    # Stage 1 observation sources — disabled by default; these feed the review queue.
+    nws_alerts_enabled: bool = False
+    nws_alerts_area: str = ""  # empty = all active alerts; otherwise state/region code, e.g. "PA"
+    nws_alerts_interval_seconds: int = 1800
+
+    bluesky_enabled: bool = False
+    bluesky_query: str = "protest OR demonstration"
+    bluesky_max_records: int = 25
+    bluesky_interval_seconds: int = 1800
+
+    mastodon_enabled: bool = False
+    mastodon_instance_url: str = "https://mastodon.social"
+    mastodon_access_token: str = ""
+    mastodon_query: str = "protest"
+    mastodon_max_records: int = 25
+    mastodon_interval_seconds: int = 1800
+
+    acled_enabled: bool = False
+    acled_api_url: str = "https://api.acleddata.com/acled/read"
+    acled_api_key: str = ""
+    acled_email: str = ""
+    acled_lookback_days: int = 7
+    acled_max_records: int = 50
+    acled_interval_seconds: int = 3600
+
+    # Local AI enrichment — safe by default: opt-in, bounded, and nullable.
+    ollama_embeddings_enabled: bool = False
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_embedding_model: str = "all-minilm"
+
 
 settings = Settings()

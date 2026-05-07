@@ -138,6 +138,7 @@ class EvidenceItem(Base):
 
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     trust_tier: Mapped[str] = mapped_column(String(32), nullable=False, default="weak")
+    embedding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 

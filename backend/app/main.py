@@ -20,6 +20,7 @@ def _migrate():
         for stmt in [
             "ALTER TABLE ingest_runs ADD COLUMN ingest_source VARCHAR(32)",
             "ALTER TABLE events ADD COLUMN location_precision VARCHAR(32)",
+            "ALTER TABLE evidence_items ADD COLUMN embedding_json TEXT",
         ]:
             try:
                 conn.execute(text(stmt))

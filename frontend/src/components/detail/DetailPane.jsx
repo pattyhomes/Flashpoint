@@ -1,292 +1,197 @@
-import { useRef, useEffect } from 'react'
-import { relativeTime, formatDate } from '../../utils/time'
+import { useEffect, useRef } from 'react'
+import { formatDate, relativeTime } from '../../utils/time.js'
+
+function pct(value) {
+  return Math.round((value || 0) * 100)
+}
 
 function severityColor(score) {
-  if (score >= 0.8) return '#ef4444'
-  if (score >= 0.6) return '#f59e0b'
-  if (score >= 0.4) return '#eab308'
-  return '#22c55e'
+  if (score >= 0.8) return '#ff3a2e'
+  if (score >= 0.6) return '#ff7a18'
+  if (score >= 0.4) return '#ffb524'
+  return '#5d8aa8'
 }
 
-function ScoreBar({ label, value }) {
+function distanceMiles(aLat, aLon, bLat, bLon) {
+  const radius = 3958.8
+  const toRad = (value) => value * Math.PI / 180
+  const dLat = toRad(bLat - aLat)
+  const dLon = toRad(bLon - aLon)
+  const lat1 = toRad(aLat)
+  const lat2 = toRad(bLat)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
+  return 2 * radius * Math.asin(Math.sqrt(h))
+}
+
+function nearbySignals(signals, lat, lon) {
+  if (!lat || !lon) return []
+  return signals
+    .map(signal => ({ signal, distance: distanceMiles(lat, lon, signal.latitude, signal.longitude) }))
+    .filter(item => item.distance <= 60)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 5)
+}
+
+function ScoreGrid({ scores }) {
   return (
-    <div className="score-bar-row">
-      <span className="score-bar-row__label">{label}</span>
-      <div className="score-bar">
-        <div
-          className="score-bar__fill"
-          style={{ width: `${value * 100}%`, backgroundColor: severityColor(value) }}
-        />
+    <div className="score-grid">
+      {scores.map(score => (
+        <div key={score.label} className="score-box">
+          <span>{score.label}</span>
+          <b>{pct(score.value)}</b>
+          <i style={{ width: `${pct(score.value)}%`, background: severityColor(score.value) }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TrendChart({ trend }) {
+  const buckets = trend?.buckets || []
+  const max = Math.max(1, ...buckets.map(bucket => bucket.event_count || 0))
+  return (
+    <div className="trend-chart" aria-label="24 hour event volume">
+      <div className="trend-chart__head">
+        <span>24H EVENT VOLUME</span>
+        <b>{buckets.reduce((sum, bucket) => sum + (bucket.event_count || 0), 0)} EVT</b>
       </div>
-      <span className="score-bar-row__val">{Math.round(value * 100)}</span>
+      <div className="trend-chart__bars">
+        {buckets.map(bucket => (
+          <i
+            key={bucket.bucket_start}
+            title={`${bucket.event_count} events`}
+            style={{
+              height: `${Math.max(4, (bucket.event_count / max) * 54)}px`,
+              background: bucket.event_count > 0 ? severityColor(bucket.max_severity) : 'rgba(255,255,255,0.08)',
+            }}
+          />
+        ))}
+      </div>
     </div>
   )
 }
 
-function badgeStyle(type) {
-  const colors = {
-    violence:                       { color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
-    political_violence:             { color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
-    riot:                           { color: '#ef4444', border: 'rgba(239,68,68,0.4)' },
-    police_clash:                   { color: '#f59e0b', border: 'rgba(245,158,11,0.4)' },
-    unrest:                         { color: '#f59e0b', border: 'rgba(245,158,11,0.4)' },
-    vandalism_tied_to_unrest:       { color: '#f59e0b', border: 'rgba(245,158,11,0.4)' },
-    crowd_disruption:               { color: '#eab308', border: 'rgba(234,179,8,0.4)' },
-    protest_related_road_shutdown:  { color: '#eab308', border: 'rgba(234,179,8,0.4)' },
-    disruption:                     { color: '#eab308', border: 'rgba(234,179,8,0.4)' },
-    protest:                        { color: '#22c55e', border: 'rgba(34,197,94,0.4)' },
-  }
-  const c = colors[type] || { color: '#9aa0b0', border: 'rgba(154,160,176,0.4)' }
-  return { color: c.color, borderColor: c.border }
+function Sources({ sources }) {
+  if (!sources || sources.length === 0) return <span className="empty-note">No source ledger attached.</span>
+  return sources.map(source => (
+    <div key={source.id} className="source-ledger-row">
+      <span>{source.source_name || source.source_type}</span>
+      <b>{source.source_trust_weight === 0 ? 'COPY' : 'INDEP'}</b>
+      <a href={source.source_url || undefined} target="_blank" rel="noreferrer">
+        {source.source_title || source.source_url || 'Source record'}
+      </a>
+      <i>{relativeTime(source.source_published_at)}</i>
+    </div>
+  ))
 }
 
-function hotspotSummary(h, memberEvents) {
-  const trend = h.trend_state === 'escalating' ? 'Escalating'
-              : h.trend_state === 'declining'  ? 'Declining'
-              : 'Ongoing'
-  const sev   = h.severity_score >= 0.8 ? 'high-severity'
-              : h.severity_score >= 0.5 ? 'moderate-severity'
-              : 'low-severity'
-  let text = `${trend} ${sev} cluster · ${h.event_count} event${h.event_count !== 1 ? 's' : ''} · priority ${Math.round(h.priority_score * 100)}.`
-  if (memberEvents.length > 0) {
-    const counts = {}
-    memberEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1 })
-    const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
-    text += ` Predominant type: ${dominant}.`
-    // Note imprecise location coverage
-    const imprecise = memberEvents.filter(e => e.location_precision === 'state' || e.location_precision === 'country').length
-    if (imprecise > 0 && imprecise === memberEvents.length) {
-      text += ` Regional aggregate — all signals are state-level. Location is approximate.`
-    } else if (imprecise > 0) {
-      text += ` ${imprecise} event${imprecise !== 1 ? 's' : ''} with imprecise location — cluster label may be approximate.`
-    }
-  }
-  return text
-}
-
-// Source evidence section for Event Registry articles
-function SourceList({ sources }) {
-  if (!sources || sources.length === 0) return null
-  const independent = sources.filter(s => s.source_trust_weight > 0)
+function SignalContext({ signals, lat, lon }) {
+  const rows = nearbySignals(signals, lat, lon)
   return (
-    <div className="detail-section">
-      <span className="detail-section__heading">
-        Sources{independent.length > 0 ? ` (${independent.length} independent)` : ''}
-      </span>
-      {sources.map(src => {
-        const isSyndicated = src.source_trust_weight === 0
-        const titleText = src.source_title
-          ? (src.source_title.length > 72 ? src.source_title.slice(0, 72) + '…' : src.source_title)
-          : null
-        return (
-          <div key={src.id} className="source-row" style={{ opacity: isSyndicated ? 0.55 : 1 }}>
-            <span className="source-row__outlet">{src.source_name || '—'}</span>
-            <span className="source-row__title">
-              {src.source_url && titleText
-                ? <a href={src.source_url} target="_blank" rel="noreferrer" className="source-row__link">{titleText}</a>
-                : titleText || '—'
-              }
-              {isSyndicated && (
-                <span className="source-row__syndicated"> [SYNDICATED]</span>
-              )}
-            </span>
-            <span className="source-row__time">{relativeTime(src.source_published_at)}</span>
-          </div>
-        )
-      })}
-    </div>
+    <section className="detail-section">
+      <div className="detail-section__title">
+        <span>Nearby Signals</span>
+        <b>CONTEXT ONLY</b>
+      </div>
+      {rows.length === 0 ? (
+        <span className="empty-note">No eligible signal context nearby.</span>
+      ) : rows.map(({ signal, distance }) => (
+        <div key={signal.id} className="signal-context-row">
+          <span>{signal.source_family}</span>
+          <b>{Math.round(distance)} mi</b>
+          <em>{signal.title}</em>
+        </div>
+      ))}
+    </section>
   )
 }
 
-function EventDetail({ event, detail, detailLoading }) {
-  const location = [event.city, event.state].filter(Boolean).join(', ') || event.country
-  const isGdelt = event.source_name === 'gdelt'
-  const displayTitle = isGdelt
-    ? `${event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)} coded signal — ${location}`
-    : event.title
-
-  // Use the enriched detail from backend when available; fall back to list data
+function EventDetail({ event, detail, detailLoading, signals }) {
   const enriched = detail || event
-  const sources  = detail?.sources ?? []
-
-  // Location precision indicator (show when city-level or worse)
-  const precision = enriched.location_precision
-  const showPrecision = precision && precision !== 'venue'
-
+  const location = [event.city, event.state].filter(Boolean).join(', ') || event.country
   return (
     <div className="detail-body">
-      <div className="detail-title">{displayTitle}</div>
-
-      <div className="detail-row">
-        <span className="detail-row__label">Type</span>
-        <span
-          className="detail-badge"
-          style={badgeStyle(event.event_type)}
-        >
-          {event.event_type}
-        </span>
+      <div className="detail-kicker">EVENT · {event.source_name}</div>
+      <h2>{event.source_name === 'gdelt' ? `${event.event_type} signal — ${location}` : event.title}</h2>
+      <div className="detail-meta-grid">
+        <span><b>ID</b>{event.id}</span>
+        <span><b>TYPE</b>{event.event_type}</span>
+        <span><b>WHERE</b>{location}</span>
+        <span><b>WHEN</b>{formatDate(event.occurred_at)}</span>
       </div>
-
-      {isGdelt && (
-        <div className="detail-row">
-          <span className="detail-row__label">Signal</span>
-          <span className="detail-row__value detail-row__value--muted">
-            GDELT coded signal · {event.source_count} source{event.source_count !== 1 ? 's' : ''}
-          </span>
-        </div>
-      )}
-
-      <div className="detail-meta">
-        <div className="detail-row">
-          <span className="detail-row__label">ID</span>
-          <span className="detail-row__value">{event.id}</span>
-        </div>
-        <div className="detail-row">
-          <span className="detail-row__label">Location</span>
-          <span className="detail-row__value detail-row__value--primary">
-            {location}
-            {showPrecision && (
-              <span style={{ color: 'var(--text-muted)', fontWeight: 'normal', marginLeft: '0.4em' }}>
-                ({precision}-level)
-              </span>
-            )}
-          </span>
-        </div>
-        <div className="detail-row">
-          <span className="detail-row__label">Occurred</span>
-          <span className="detail-row__value">{formatDate(event.occurred_at)}</span>
-        </div>
-        {event.trend_state && (
-          <div className="detail-row">
-            <span className="detail-row__label">Trend</span>
-            <span className="detail-row__value">{event.trend_state}</span>
-          </div>
-        )}
-        <div className="detail-row">
-          <span className="detail-row__label">Source</span>
-          <span className="detail-row__value">
-            {enriched.source_url
-              ? <a href={enriched.source_url} target="_blank" rel="noreferrer" className="source-row__link">{event.source_name}</a>
-              : event.source_name
-            }
-          </span>
-        </div>
-        {(isGdelt || event.source_count > 1) && (
-          <div className="detail-row">
-            <span className="detail-row__label">Sources</span>
-            <span className="detail-row__value">{event.source_count}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="detail-section">
-        <span className="detail-section__heading">Scores</span>
-        <ScoreBar label="Severity" value={event.severity_score} />
-        <ScoreBar label="Conf" value={event.confidence_score} />
-      </div>
-
+      <ScoreGrid scores={[
+        { label: 'Severity', value: event.severity_score },
+        { label: 'Confidence', value: event.confidence_score },
+      ]} />
       {event.summary && (
-        <div className="detail-section">
-          <span className="detail-section__heading">Summary</span>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            {event.summary}
-          </p>
-        </div>
+        <section className="detail-section">
+          <div className="detail-section__title"><span>Summary</span></div>
+          <p>{event.summary}</p>
+        </section>
       )}
-
-      {detailLoading && (
-        <div className="detail-section">
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Loading sources…</span>
+      <SignalContext signals={signals} lat={event.latitude} lon={event.longitude} />
+      <section className="detail-section">
+        <div className="detail-section__title">
+          <span>Sources</span>
+          {detailLoading && <b>LOADING</b>}
         </div>
-      )}
-
-      {!detailLoading && <SourceList sources={sources} />}
+        <Sources sources={enriched.sources || []} />
+      </section>
     </div>
   )
 }
 
-function HotspotDetail({ hotspot, memberEvents, loading }) {
-  const events = memberEvents ?? []
+function HotspotDetail({ hotspot, memberEvents = [], loading, trend, signals }) {
   return (
     <div className="detail-body">
-      <div className="detail-title">{hotspot.name || 'Unnamed Hotspot'}</div>
-
-      <div className="detail-meta">
-        <div className="detail-row">
-          <span className="detail-row__label">Status</span>
-          <span className="detail-row__value detail-row__value--primary">{hotspot.status_label}</span>
+      <div className="detail-kicker">PRIORITY HOTSPOT · {hotspot.trend_state || 'stable'}</div>
+      <h2>{hotspot.name || 'Unnamed Hotspot'}</h2>
+      <div className="detail-meta-grid">
+        <span><b>STATUS</b>{hotspot.status_label || 'Active'}</span>
+        <span><b>EVENTS</b>{hotspot.event_count}</span>
+        <span><b>LAT</b>{hotspot.centroid_lat.toFixed(3)}</span>
+        <span><b>LON</b>{hotspot.centroid_lon.toFixed(3)}</span>
+      </div>
+      <ScoreGrid scores={[
+        { label: 'Priority', value: hotspot.priority_score },
+        { label: 'Severity', value: hotspot.severity_score },
+        { label: 'Momentum', value: hotspot.momentum_score },
+        { label: 'Confidence', value: hotspot.confidence_score },
+      ]} />
+      <TrendChart trend={trend} />
+      <SignalContext signals={signals} lat={hotspot.centroid_lat} lon={hotspot.centroid_lon} />
+      <section className="detail-section">
+        <div className="detail-section__title">
+          <span>Member Events</span>
+          {loading && <b>LOADING</b>}
         </div>
-        <div className="detail-row">
-          <span className="detail-row__label">Trend</span>
-          <span className="detail-row__value">{hotspot.trend_state || '—'}</span>
-        </div>
-        <div className="detail-row">
-          <span className="detail-row__label">Events</span>
-          <span className="detail-row__value">{hotspot.event_count}</span>
-        </div>
-        {hotspot.last_computed_at && (
-          <div className="detail-row">
-            <span className="detail-row__label">Computed</span>
-            <span className="detail-row__value">{formatDate(hotspot.last_computed_at)}</span>
+        {memberEvents.length === 0 ? (
+          <span className="empty-note">No events assigned.</span>
+        ) : memberEvents.slice(0, 10).map(event => (
+          <div key={event.id} className="member-event-row">
+            <i style={{ background: severityColor(event.severity_score) }} />
+            <span>{event.event_type}</span>
+            <b>{event.source_name === 'gdelt' ? `${event.event_type} signal — ${event.city || event.country}` : event.title}</b>
+            <em>{relativeTime(event.occurred_at)}</em>
           </div>
-        )}
-      </div>
-
-      <div className="detail-section">
-        <span className="detail-section__heading">Scores</span>
-        <ScoreBar label="Priority" value={hotspot.priority_score} />
-        <ScoreBar label="Severity" value={hotspot.severity_score} />
-        <ScoreBar label="Momentum" value={hotspot.momentum_score} />
-        <ScoreBar label="Conf" value={hotspot.confidence_score} />
-      </div>
-
-      <div className="detail-section">
-        <span className="detail-section__heading">Centroid</span>
-        <div className="detail-row">
-          <span className="detail-row__label">Lat</span>
-          <span className="detail-row__value">{hotspot.centroid_lat.toFixed(4)}</span>
-        </div>
-        <div className="detail-row">
-          <span className="detail-row__label">Lon</span>
-          <span className="detail-row__value">{hotspot.centroid_lon.toFixed(4)}</span>
-        </div>
-      </div>
-
-      <div className="detail-section">
-        <span className="detail-section__heading">Assessment</span>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-          {hotspotSummary(hotspot, events)}
-        </p>
-      </div>
-
-      <div className="detail-section">
-        <span className="detail-section__heading">Member Events</span>
-        {loading
-          ? <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Loading events…</span>
-          : events.length === 0
-            ? <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No events assigned</span>
-            : events.slice(0, 8).map(e => (
-                <div key={e.id} className="hotspot-event-row">
-                  <span className="hotspot-event-row__dot" style={{ backgroundColor: severityColor(e.severity_score) }} />
-                  <span className="hotspot-event-row__type">{e.source_name === 'gdelt' ? 'GDELT' : e.event_type}</span>
-                  <span className="hotspot-event-row__title">
-                    {e.source_name === 'gdelt'
-                      ? `${e.event_type} signal — ${e.city || e.country}`
-                      : e.title}
-                  </span>
-                  <span className="hotspot-event-row__time">{relativeTime(e.occurred_at)}</span>
-                </div>
-              ))
-        }
-      </div>
+        ))}
+      </section>
     </div>
   )
 }
 
-export default function DetailPane({ item, onClose, hotspotDetail, hotspotDetailLoading, eventDetail, eventDetailLoading }) {
+export default function DetailPane({
+  item,
+  onClose,
+  hotspotDetail,
+  hotspotDetailLoading,
+  hotspotTrend,
+  eventDetail,
+  eventDetailLoading,
+  signals = [],
+}) {
   const paneRef = useRef(null)
 
-  // Reset scroll to top whenever the selected item changes
   useEffect(() => {
     if (paneRef.current) paneRef.current.scrollTop = 0
   }, [item])
@@ -294,9 +199,7 @@ export default function DetailPane({ item, onClose, hotspotDetail, hotspotDetail
   if (!item) {
     return (
       <div className="detail-pane detail-pane--empty">
-        <span className="detail-pane__hint">
-          Select an event or priority to view details
-        </span>
+        <span className="empty-note">Select an event or priority for detail.</span>
       </div>
     )
   }
@@ -304,21 +207,25 @@ export default function DetailPane({ item, onClose, hotspotDetail, hotspotDetail
   return (
     <div className="detail-pane" ref={paneRef}>
       <div className="detail-pane__header">
-        <span className="detail-pane__type">{item.type}</span>
-        <button className="detail-pane__close" onClick={onClose} aria-label="Close">✕</button>
+        <button type="button" onClick={onClose}>BACK</button>
+        <span>{item.type === 'hotspot' ? 'HOTSPOT DETAIL' : 'EVENT DETAIL'}</span>
       </div>
-      {item.type === 'event'
-        ? <EventDetail
-            event={item.data}
-            detail={eventDetail}
-            detailLoading={eventDetailLoading ?? false}
-          />
-        : <HotspotDetail
-            hotspot={hotspotDetail || item.data}
-            memberEvents={hotspotDetail?.member_events}
-            loading={hotspotDetailLoading ?? false}
-          />
-      }
+      {item.type === 'event' ? (
+        <EventDetail
+          event={item.data}
+          detail={eventDetail}
+          detailLoading={eventDetailLoading}
+          signals={signals}
+        />
+      ) : (
+        <HotspotDetail
+          hotspot={hotspotDetail || item.data}
+          memberEvents={hotspotDetail?.member_events || []}
+          loading={hotspotDetailLoading}
+          trend={hotspotTrend}
+          signals={signals}
+        />
+      )}
     </div>
   )
 }

@@ -14,6 +14,11 @@ def _resolve_database_url(url: str) -> str:
     if not url.startswith(prefix) or url.startswith("sqlite:////"):
         return url
     raw_path = url.removeprefix(prefix)
+    if raw_path.startswith("../data/"):
+        repo_root = Path(__file__).resolve().parents[2]
+        resolved = repo_root / "data" / raw_path.removeprefix("../data/")
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        return f"{prefix}{resolved}"
     db_path = Path(raw_path)
     if db_path.is_absolute():
         return url

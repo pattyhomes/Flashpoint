@@ -180,12 +180,15 @@ bash scripts/pi_start.sh
 
 ## Closing and Relaunching
 
-The shell runs fullscreen with no window manager chrome. Two quit mechanisms are available:
+The shell runs fullscreen with no window manager chrome. In normal kiosk mode,
+the native close affordance is hidden.
 
-- **On-screen close button** — a `✕` button in the top-right corner, always visible. Click it to quit.
-- **Ctrl+Q keyboard shortcut** — same effect.
+- **Maintenance close button** — run with `FLASHPOINT_DEV_QUIT=1` to show a `✕`
+  button in the top-right corner.
+- **Ctrl+Q keyboard shortcut** — also enabled when `FLASHPOINT_DEV_QUIT=1`.
 
-Both are controlled by `FLASHPOINT_DEV_QUIT=1` in `pi_start.sh`. The backend service
+Both are controlled by `FLASHPOINT_DEV_QUIT`, which defaults to `0` in
+`pi_start.sh`. The backend service
 (`flashpoint-backend.service`) continues running when the shell quits — it does not need
 to be restarted.
 

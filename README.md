@@ -12,7 +12,7 @@
 [![MapLibre GL](https://img.shields.io/badge/MapLibre_GL-5.21-396CB2)](https://maplibre.org)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003b57?logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry_Pi-5-c51a4a?logo=raspberry-pi&logoColor=white)](https://raspberrypi.com)
-[![Tests](https://img.shields.io/badge/tests-106_passing-22c55e)](backend/tests/)
+[![Tests](https://img.shields.io/badge/tests-134_passing-22c55e)](backend/tests/)
 
 </div>
 
@@ -35,15 +35,17 @@ The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs e
 - **Multi-source ingestion** — GDELT 2.0 (free, 15-min cadence) and Event Registry (API key, supplementary). Mock source for dev and demo.
 - **Deterministic classifier** — four-signal NLP pipeline (title keywords, body keywords, DMOZ categories, Wikipedia concepts). No LLM, no external calls. Classifies into 8 event types: `protest`, `riot`, `political_violence`, `police_clash`, `vandalism_tied_to_unrest`, `crowd_disruption`, `protest_related_road_shutdown`, `unrest`.
 - **Three-layer deduplication** — exact `source_id` match → cross-source similarity (haversine + time window + Jaccard title) → syndicated copy detection (6 rules: same outlet, wire family, title similarity, wire domain URL, timestamp proximity, ER event URI grouping).
-- **Corroboration model** — each independent source adds +0.08 confidence. Syndicated wire republications (AP, Reuters, UPI, AFP, CNN, NBC) add zero. Uncorroborated ER-only events are confidence-capped by location precision tier (venue: 0.62, city: 0.58, state: 0.45).
+- **Evidence-first intelligence model** — raw sources create `EvidenceItem` and `Observation` records first. Safe independent-family corroboration can auto-link/promote; weak social volume remains signal heat until corroborated.
+- **Corroboration model** — each independent source family can add confidence. Syndicated wire republications (AP, Reuters, UPI, AFP, CNN, NBC) add zero. Uncorroborated ER-only events are confidence-capped by location precision tier (venue: 0.62, city: 0.58, state: 0.45).
 - **Geographic hotspot clustering** — two-pass greedy radius algorithm (75-mile metro radius, 72-hour event window). City/venue events anchor and merge in pass 1; state-level signals fall back to pass 2 state grouping. Pruned to minimum 3 events, capped at 15 hotspots.
 - **Proximity-weighted hotspot naming** — ranks candidate city names by `count / (1 + mean_distance / 50mi)` so the closest, most-frequent city wins. Falls back to county → state region → coordinates.
 - **Trend analysis** — compares 0–8h vs 8–24h event windows per cluster. Escalating / stable / declining with severity delta gating.
-- **Dark-theme map dashboard** — MapLibre GL with CARTO Dark Matter basemap. Severity-colored event circles, trend-colored hotspot glow rings, toggleable heatmap layer, fly-to animation on selection.
+- **V3 workstation UI** — landscape, map-first operator shell with top chrome, real workspace tabs, left navigation rail, right priority/source rail, Incidents drawer, local fonts, and app-data telemetry.
+- **Confirmed + signal map layers** — MapLibre GL with local in-code CARTO dark raster style. Confirmed events render as red/orange heat, clusters, and dots; eligible unconfirmed observations render as separate amber signal heat.
 - **60-second polling with selection reconciliation** — hotspots, priorities, and system status refresh automatically. If the selected hotspot is recomputed away (ID reuse), the selection is transparently cleared.
 - **Operator status surface** — status bar shows data freshness, staleness detection, run-failed alerts, and ingest-cycle sync indicators.
 - **Touch-ready Pi appliance** — systemd user service + XDG autostart + fullscreen Qt shell with native connecting/unavailable overlay states. No browser chrome, no accounts, no cloud.
-- **106 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming.
+- **134 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming, evidence workflows, map signals, and hotspot trend buckets.
 
 ---
 
@@ -175,6 +177,10 @@ bash scripts/run_kiosk.sh
 This uses the same backend/frontend orchestration as `scripts/run.sh`, but exports
 `FLASHPOINT_FULLSCREEN=1`. The Raspberry Pi autostart path already uses the same
 fullscreen shell mode through `scripts/pi_start.sh`.
+
+On the Pi, `scripts/pi_start.sh` hides the native close button by default for kiosk
+use. For maintenance sessions, launch with `FLASHPOINT_DEV_QUIT=1` to show the
+close affordance and enable the shell quit shortcut.
 
 ### Individual services
 
@@ -358,7 +364,7 @@ APP_ENV=development
 APP_HOST=127.0.0.1
 APP_PORT=8000
 
-DATABASE_URL=sqlite:///../data/flashpoint.db
+DATABASE_URL=sqlite:///./data/flashpoint.db
 
 # Primary ingestion source: "mock" (dev) or "gdelt" (production)
 INGEST_SOURCE=mock

@@ -1,94 +1,162 @@
-/* ── Reset ── */
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-400.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-500.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-600.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-700.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('/fonts/inter-tight-500.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('/fonts/inter-tight-600.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('/fonts/inter-tight-700.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-400.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-500.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-600.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-/* ── Design Tokens ── */
 :root {
-  /* Surfaces */
-  --surface-0: #0a0c10;
-  --surface-1: #111318;
-  --surface-2: #181b22;
-  --surface-3: #1f2330;
-  --surface-border: #2a2e3b;
-
-  /* Text */
-  --text-primary: #e8eaed;
-  --text-secondary: #9aa0b0;
-  --text-muted: #5c6275;
-
-  /* Accent */
-  --accent: #4a9eff;
-  --accent-dim: rgba(74, 158, 255, 0.15);
-
-  /* Severity */
-  --sev-critical: #ef4444;
-  --sev-high: #f59e0b;
-  --sev-medium: #eab308;
-  --sev-low: #22c55e;
-
-  /* Trend */
-  --trend-escalating: #ef4444;
-  --trend-stable: #9aa0b0;
-  --trend-declining: #22c55e;
-
-  /* Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-  --font-mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
-
-  --text-xs:   0.6875rem; /* 11px */
-  --text-sm:   0.75rem;   /* 12px */
-  --text-base: 0.8125rem; /* 13px */
-  --text-lg:   0.9375rem; /* 15px */
-  --text-xl:   1.125rem;  /* 18px */
-
-  /* Spacing */
-  --sp-xs: 4px;
-  --sp-sm: 8px;
-  --sp-md: 12px;
-  --sp-lg: 16px;
-  --sp-xl: 24px;
-
-  /* Touch */
+  --s-0: #04060a;
+  --s-1: #070a0f;
+  --s-2: #0a0e15;
+  --s-3: #101722;
+  --s-4: #17202d;
+  --s-5: #1e2a39;
+  --line: rgba(154, 168, 190, 0.18);
+  --line-strong: rgba(201, 211, 226, 0.28);
+  --t-0: #e8ecf2;
+  --t-1: #aab2c0;
+  --t-2: #737f91;
+  --t-3: #4e5b6d;
+  --accent: #6db3ff;
+  --accent-2: #ffb524;
+  --crit: #ff3a2e;
+  --high: #ff7a18;
+  --med: #ffb524;
+  --low: #5d8aa8;
+  --up: #ff5a3a;
+  --down: #4ea36a;
+  --ok: #4ea36a;
+  --warn: #ffb524;
+  --fail: #ff3a2e;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-tight: 'Inter Tight', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+  --top-h: 40px;
+  --tabs-h: 32px;
+  --bottom-h: 26px;
+  --nav-w: 56px;
+  --right-w: 330px;
+  --detail-w: 440px;
+  --drawer-w: 500px;
+  --radius: 4px;
   --touch-min: 44px;
-
-  /* Panels */
-  --left-w:    240px;
-  --right-w:   320px;
-  --bottom-h:  220px;
-  --status-h:  32px;
-  --radius:    4px;
 }
 
-/* ── Base ── */
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   overflow: hidden;
 }
 
 body {
+  color: var(--t-0);
+  background: var(--s-0);
   font-family: var(--font-sans);
-  font-size: var(--text-base);
-  color: var(--text-primary);
-  background-color: var(--surface-0);
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.35;
   -webkit-font-smoothing: antialiased;
-  /* Faint grid texture */
-  background-image:
-    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
-  background-size: 40px 40px;
+  text-rendering: geometricPrecision;
+}
+
+button,
+input {
+  font: inherit;
 }
 
 button {
-  font-family: inherit;
-  font-size: inherit;
   cursor: pointer;
 }
 
-/* ── Scrollbars ── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 2px; }
+button:disabled {
+  cursor: default;
+}
+
+a {
+  color: var(--accent);
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(170, 178, 192, 0.24);
+  border-radius: 2px;
+}

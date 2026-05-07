@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   dismissObservation,
   fetchEventDetail,
   fetchEvents,
   fetchHotspotDetail,
   fetchHotspots,
+  fetchHotspotTrend,
+  fetchMapSignals,
   fetchObservations,
   fetchPriorities,
   fetchSystemStatus,
@@ -13,127 +15,171 @@ import {
 } from './services/api.js'
 
 import Shell from './components/layout/Shell.jsx'
-import StatusBar from './components/layout/StatusBar.jsx'
+import TopChrome from './components/layout/TopChrome.jsx'
+import WorkspaceTabs from './components/layout/WorkspaceTabs.jsx'
+import NavRail from './components/layout/NavRail.jsx'
+import ControlPopover from './components/layout/ControlPopover.jsx'
+import TelemetryBar from './components/layout/TelemetryBar.jsx'
 import MapPanel from './components/map/MapPanel.jsx'
-import FilterRail from './components/filters/FilterRail.jsx'
-import PriorityList from './components/priorities/PriorityList.jsx'
-import DetailPane from './components/detail/DetailPane.jsx'
-import EventFeed from './components/feed/EventFeed.jsx'
-import ObservationReview from './components/review/ObservationReview.jsx'
+import RightRail from './components/workstation/RightRail.jsx'
+import IncidentsDrawer from './components/workstation/IncidentsDrawer.jsx'
+
+const DEFAULT_LAYERS = {
+  events: true,
+  hotspots: true,
+  confirmedHeat: true,
+  signalHeat: true,
+}
+
+function parseTime(value) {
+  if (!value) return null
+  const date = new Date(String(value).match(/Z$|[+-]\d{2}:\d{2}$/) ? value : `${value}Z`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function withinWindow(value, hours) {
+  const date = parseTime(value)
+  if (!date) return false
+  return date.getTime() >= Date.now() - hours * 3600 * 1000
+}
 
 export default function App() {
-  const [events, setEvents]       = useState([])
-  const [eventTotal,        setEventTotal]        = useState(0)
-  const [eventsOffset,      setEventsOffset]      = useState(0)
-  const [eventsHasMore,     setEventsHasMore]     = useState(false)
+  const [events, setEvents] = useState([])
+  const [eventTotal, setEventTotal] = useState(0)
+  const [eventsOffset, setEventsOffset] = useState(0)
+  const [eventsHasMore, setEventsHasMore] = useState(false)
   const [eventsLoadingMore, setEventsLoadingMore] = useState(false)
-  const [hotspots, setHotspots]   = useState([])
+  const [hotspots, setHotspots] = useState([])
   const [priorities, setPriorities] = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [lastUpdated, setLastUpdated] = useState(null)
   const [systemStatus, setSystemStatus] = useState(null)
   const [observations, setObservations] = useState([])
-  const [observationsLoading, setObservationsLoading] = useState(false)
-  const [observationBusyId, setObservationBusyId] = useState(null)
-  const [observationError, setObservationError] = useState(null)
-  // Desktop PRD §26 — when a poll fails we keep the last-good hotspots/priorities/
-  // status in state (the existing .catch never overwrites them) and surface a
-  // "served from cache" indicator so the operator knows the displayed snapshot
-  // is not the freshest available read.
+  const [mapSignals, setMapSignals] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState(null)
   const [lastPollFailed, setLastPollFailed] = useState(false)
 
   const [selectedItem, setSelectedItem] = useState(null)
-  const [hotspotDetail, setHotspotDetail]               = useState(null)
+  const [hotspotDetail, setHotspotDetail] = useState(null)
+  const [hotspotTrend, setHotspotTrend] = useState(null)
   const [hotspotDetailLoading, setHotspotDetailLoading] = useState(false)
-  const pendingHotspotId = useRef(null)
-  const selectedItemRef  = useRef(null)
-  const [eventDetail, setEventDetail]               = useState(null)
+  const [eventDetail, setEventDetail] = useState(null)
   const [eventDetailLoading, setEventDetailLoading] = useState(false)
+  const pendingHotspotId = useRef(null)
   const pendingEventId = useRef(null)
-  const [activeTypes, setActiveTypes]   = useState(new Set())
-  const [layersVisible, setLayersVisible] = useState({ events: true, hotspots: true, heatmap: false })
-  const [minSeverity,   setMinSeverity]   = useState(0)
-  const [minConfidence, setMinConfidence] = useState(0)
-  const [activeTrends,  setActiveTrends]  = useState(new Set())
+  const selectedItemRef = useRef(null)
 
-  function applyEventsPage(evPage) {
-    setEvents(evPage.items)
-    setEventTotal(evPage.total)
-    setEventsOffset(evPage.items.length)
-    setEventsHasMore(evPage.has_more)
+  const [activeTypes, setActiveTypes] = useState(new Set())
+  const [activeTrends, setActiveTrends] = useState(new Set())
+  const [minSeverity, setMinSeverity] = useState(0)
+  const [minConfidence, setMinConfidence] = useState(0)
+  const [timeWindow, setTimeWindow] = useState(24)
+  const [layersVisible, setLayersVisible] = useState(DEFAULT_LAYERS)
+  const [activePopover, setActivePopover] = useState(null)
+  const [activeWorkspace, setActiveWorkspace] = useState('map')
+  const [rightTab, setRightTab] = useState('priorities')
+  const [signalFocus, setSignalFocus] = useState(null)
+
+  const [observationsLoading, setObservationsLoading] = useState(false)
+  const [observationBusyId, setObservationBusyId] = useState(null)
+  const [observationError, setObservationError] = useState(null)
+
+  function applyEventsPage(page) {
+    setEvents(page.items)
+    setEventTotal(page.total)
+    setEventsOffset(page.items.length)
+    setEventsHasMore(page.has_more)
+  }
+
+  function mergeEventsPage(page) {
+    setEvents(prev => {
+      const byId = new Map(page.items.map(event => [event.id, event]))
+      for (const event of prev) {
+        if (!byId.has(event.id)) byId.set(event.id, event)
+      }
+      return [...byId.values()]
+    })
+    setEventTotal(page.total)
+    setEventsOffset(prev => Math.max(prev, page.items.length))
+    setEventsHasMore(page.has_more)
   }
 
   function refreshObservations() {
     setObservationsLoading(true)
-    return fetchObservations('lead')
-      .then(obs => {
+    return Promise.all([fetchObservations('lead'), fetchMapSignals()])
+      .then(([obs, signals]) => {
         setObservations(obs)
+        setMapSignals(signals)
         setObservationError(null)
       })
-      .catch(err => {
-        console.error('[Flashpoint] observations error:', err)
-        setObservationError('Lead queue unavailable')
+      .catch(error => {
+        console.error('[Flashpoint] observations error:', error)
+        setObservationError('Lead exceptions unavailable')
       })
       .finally(() => setObservationsLoading(false))
   }
 
   function refreshConfirmedData() {
-    return Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
-      .then(([evPage, hs, pr, status]) => {
-        applyEventsPage(evPage)
-        setHotspots(hs)
-        setPriorities(pr)
-        setSystemStatus(status)
-        setLastUpdated(new Date())
-        setLastPollFailed(false)
-      })
+    return Promise.all([
+      fetchEvents(500, 0),
+      fetchHotspots(),
+      fetchPriorities(),
+      fetchSystemStatus(),
+      fetchMapSignals(),
+    ]).then(([eventPage, hotspotRows, priorityRows, status, signals]) => {
+      applyEventsPage(eventPage)
+      setHotspots(hotspotRows)
+      setPriorities(priorityRows)
+      setSystemStatus(status)
+      setMapSignals(signals)
+      setLastUpdated(new Date())
+      setLastPollFailed(false)
+    })
   }
 
-  // Fetch all data on mount; poll hotspots/priorities/status every 60s thereafter
   useEffect(() => {
-    Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus(), fetchObservations('lead')])
-      .then(([evPage, hs, pr, status, obs]) => {
-        applyEventsPage(evPage)
-        setHotspots(hs)
-        setPriorities(pr)
+    Promise.all([
+      fetchEvents(500, 0),
+      fetchHotspots(),
+      fetchPriorities(),
+      fetchSystemStatus(),
+      fetchObservations('lead'),
+      fetchMapSignals(),
+    ])
+      .then(([eventPage, hotspotRows, priorityRows, status, obs, signals]) => {
+        applyEventsPage(eventPage)
+        setHotspots(hotspotRows)
+        setPriorities(priorityRows)
         setSystemStatus(status)
         setObservations(obs)
+        setMapSignals(signals)
         setLastUpdated(new Date())
       })
-      .catch(err => console.error('[Flashpoint] fetch error:', err))
+      .catch(error => {
+        console.error('[Flashpoint] initial fetch error:', error)
+        setLastPollFailed(true)
+      })
       .finally(() => setLoading(false))
 
-    // Poll hotspots, priorities, and system status every 60s.
-    // Events are not polled — the user may have paginated and polling would reset that state.
     const pollId = setInterval(() => {
-      Promise.all([fetchHotspots(), fetchPriorities(), fetchSystemStatus(), fetchObservations('lead')])
-        .then(([hs, pr, status, obs]) => {
-          setHotspots(hs)
-          setPriorities(pr)
+      Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus(), fetchObservations('lead'), fetchMapSignals()])
+        .then(([eventPage, hotspotRows, priorityRows, status, obs, signals]) => {
+          mergeEventsPage(eventPage)
+          setHotspots(hotspotRows)
+          setPriorities(priorityRows)
           setSystemStatus(status)
           setObservations(obs)
+          setMapSignals(signals)
           setLastUpdated(new Date())
           setLastPollFailed(false)
 
-          // Reconcile selection: if a hotspot is selected, check it still exists.
-          // selectedItemRef.current is kept in sync via a separate effect below.
-          const sel = selectedItemRef.current
-          if (sel?.type === 'hotspot') {
-            const stillExists = hs.find(h => h.id === sel.data.id)
-            if (stillExists) {
-              setSelectedItem({ type: 'hotspot', data: stillExists })
-            } else {
-              pendingHotspotId.current = null
-              setSelectedItem(null)
-              setHotspotDetail(null)
-              setHotspotDetailLoading(false)
-            }
+          const selected = selectedItemRef.current
+          if (selected?.type === 'hotspot') {
+            const stillExists = hotspotRows.find(row => row.id === selected.data.id)
+            if (stillExists) setSelectedItem({ type: 'hotspot', data: stillExists })
           }
         })
-        .catch(err => {
-          console.error('[Flashpoint] poll error:', err)
-          // Do NOT clear hotspots/priorities/systemStatus — Desktop PRD §26
-          // requires the UI to keep showing last-known data on feed failure.
+        .catch(error => {
+          console.error('[Flashpoint] poll error:', error)
           setLastPollFailed(true)
         })
     }, 60_000)
@@ -141,110 +187,118 @@ export default function App() {
     return () => clearInterval(pollId)
   }, [])
 
-  // Load the next page of events and merge by id to prevent duplicates
-  function handleLoadMore() {
-    setEventsLoadingMore(true)
-    fetchEvents(500, eventsOffset)
-      .then(evPage => {
-        setEvents(prev => {
-          const seen = new Set(prev.map(e => e.id))
-          const fresh = evPage.items.filter(e => !seen.has(e.id))
-          return [...prev, ...fresh]
-        })
-        setEventsOffset(prev => prev + evPage.items.length)
-        setEventsHasMore(evPage.has_more)
-        setEventTotal(evPage.total)
-      })
-      .catch(err => console.error('[Flashpoint] load more error:', err))
-      .finally(() => setEventsLoadingMore(false))
-  }
-
-  // Keep selectedItemRef in sync so the poll interval can read current selection
   useEffect(() => { selectedItemRef.current = selectedItem }, [selectedItem])
 
-  // Escape key to dismiss selection
+  function clearSelection() {
+    pendingHotspotId.current = null
+    pendingEventId.current = null
+    setSelectedItem(null)
+    setHotspotDetail(null)
+    setHotspotTrend(null)
+    setHotspotDetailLoading(false)
+    setEventDetail(null)
+    setEventDetailLoading(false)
+  }
+
   useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') {
-        pendingHotspotId.current = null
-        pendingEventId.current = null
-        setSelectedItem(null)
-        setHotspotDetail(null)
-        setHotspotDetailLoading(false)
-        setEventDetail(null)
-        setEventDetailLoading(false)
+    const onKey = (event) => {
+      if (event.key === 'Escape') {
+        setActivePopover(null)
+        setActiveWorkspace('map')
+        clearSelection()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Toggle-to-deselect; load detail from backend when a hotspot or event is selected
   function handleSelect(item) {
-    const isSame = selectedItem?.type === item.type && selectedItem?.data?.id === item.data.id
-    const next = isSame ? null : item
-    setSelectedItem(next)
+    const same = selectedItem?.type === item.type && selectedItem?.data?.id === item.data.id
+    if (same) {
+      clearSelection()
+      return
+    }
 
-    if (next?.type === 'hotspot') {
-      const id = next.data.id
+    setSelectedItem(item)
+    setRightTab('priorities')
+    setActivePopover(null)
+
+    if (item.type === 'hotspot') {
+      const id = item.data.id
       pendingHotspotId.current = id
       pendingEventId.current = null
-      setHotspotDetail(null)
-      setHotspotDetailLoading(true)
       setEventDetail(null)
       setEventDetailLoading(false)
-      fetchHotspotDetail(id)
-        .then(detail => {
-          if (pendingHotspotId.current === id) setHotspotDetail(detail)
-        })
-        .catch(err => {
+      setHotspotDetail(null)
+      setHotspotTrend(null)
+      setHotspotDetailLoading(true)
+      Promise.all([fetchHotspotDetail(id), fetchHotspotTrend(id, 24)])
+        .then(([detail, trend]) => {
           if (pendingHotspotId.current === id) {
-            console.error('[Flashpoint] hotspot detail error:', err)
-            pendingHotspotId.current = null
-            setSelectedItem(null)
-            setHotspotDetail(null)
-            setHotspotDetailLoading(false)
+            setHotspotDetail(detail)
+            setHotspotTrend(trend)
           }
+        })
+        .catch(error => {
+          console.error('[Flashpoint] hotspot detail error:', error)
+          if (pendingHotspotId.current === id) clearSelection()
         })
         .finally(() => {
           if (pendingHotspotId.current === id) setHotspotDetailLoading(false)
         })
-    } else if (next?.type === 'event') {
-      const id = next.data.id
+    } else if (item.type === 'event') {
+      const id = item.data.id
       pendingEventId.current = id
       pendingHotspotId.current = null
+      setHotspotDetail(null)
+      setHotspotTrend(null)
+      setHotspotDetailLoading(false)
       setEventDetail(null)
       setEventDetailLoading(true)
-      setHotspotDetail(null)
-      setHotspotDetailLoading(false)
       fetchEventDetail(id)
         .then(detail => {
           if (pendingEventId.current === id) setEventDetail(detail)
         })
-        .catch(err => {
-          if (pendingEventId.current === id)
-            console.error('[Flashpoint] event detail error:', err)
-        })
+        .catch(error => console.error('[Flashpoint] event detail error:', error))
         .finally(() => {
           if (pendingEventId.current === id) setEventDetailLoading(false)
         })
-    } else {
-      pendingHotspotId.current = null
-      pendingEventId.current = null
-      setHotspotDetail(null)
-      setHotspotDetailLoading(false)
-      setEventDetail(null)
-      setEventDetailLoading(false)
     }
   }
 
-  // Toggle map layer visibility
-  function handleToggleLayer(key) {
-    setLayersVisible(prev => ({ ...prev, [key]: !prev[key] }))
+  function handleSignalSelect(focus) {
+    setSignalFocus({ lat: focus.lat, lon: focus.lon })
+    setActiveWorkspace('incidents')
+    setActivePopover(null)
   }
 
-  // Filter event types
-  function handleToggleType(key) {
+  function handleSetWorkspace(workspace) {
+    setActiveWorkspace(workspace)
+    if (workspace === 'map') setSignalFocus(null)
+  }
+
+  function handleShowSources() {
+    clearSelection()
+    setRightTab('sources')
+  }
+
+  function handleLoadMore() {
+    setEventsLoadingMore(true)
+    fetchEvents(500, eventsOffset)
+      .then(page => {
+        setEvents(prev => {
+          const seen = new Set(prev.map(event => event.id))
+          return [...prev, ...page.items.filter(event => !seen.has(event.id))]
+        })
+        setEventsOffset(prev => prev + page.items.length)
+        setEventsHasMore(page.has_more)
+        setEventTotal(page.total)
+      })
+      .catch(error => console.error('[Flashpoint] load more error:', error))
+      .finally(() => setEventsLoadingMore(false))
+  }
+
+  function toggleType(key) {
     setActiveTypes(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
@@ -252,8 +306,7 @@ export default function App() {
     })
   }
 
-  // Filter trend state
-  function handleToggleTrend(key) {
+  function toggleTrend(key) {
     setActiveTrends(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
@@ -261,13 +314,17 @@ export default function App() {
     })
   }
 
+  function toggleLayer(key) {
+    setLayersVisible(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   function handlePromoteObservation(id) {
     setObservationBusyId(id)
     setObservationError(null)
     promoteObservation(id)
       .then(() => Promise.all([refreshObservations(), refreshConfirmedData()]))
-      .catch(err => {
-        console.error('[Flashpoint] promote observation error:', err)
+      .catch(error => {
+        console.error('[Flashpoint] promote observation error:', error)
         setObservationError('Promote failed')
       })
       .finally(() => setObservationBusyId(null))
@@ -278,8 +335,8 @@ export default function App() {
     setObservationError(null)
     dismissObservation(id)
       .then(() => refreshObservations())
-      .catch(err => {
-        console.error('[Flashpoint] dismiss observation error:', err)
+      .catch(error => {
+        console.error('[Flashpoint] dismiss observation error:', error)
         setObservationError('Dismiss failed')
       })
       .finally(() => setObservationBusyId(null))
@@ -290,132 +347,152 @@ export default function App() {
     setObservationError(null)
     linkObservation(id, eventId)
       .then(() => Promise.all([refreshObservations(), refreshConfirmedData()]))
-      .catch(err => {
-        console.error('[Flashpoint] link observation error:', err)
+      .catch(error => {
+        console.error('[Flashpoint] link observation error:', error)
         setObservationError('Link failed')
       })
       .finally(() => setObservationBusyId(null))
   }
 
-  const filteredEvents = useMemo(() => events.filter(e => {
-    if (activeTypes.size > 0  && !activeTypes.has(e.event_type))    return false
-    if (e.severity_score   < minSeverity)                            return false
-    if (e.confidence_score < minConfidence)                          return false
-    if (activeTrends.size  > 0 && !activeTrends.has(e.trend_state)) return false
-    if (e.source_name === 'gdelt' && e.source_count < 2)             return false  // GDELT quality gate
+  const filteredEvents = useMemo(() => events.filter(event => {
+    if (!withinWindow(event.occurred_at, timeWindow)) return false
+    if (activeTypes.size > 0 && !activeTypes.has(event.event_type)) return false
+    if (event.severity_score < minSeverity) return false
+    if (event.confidence_score < minConfidence) return false
+    if (activeTrends.size > 0 && !activeTrends.has(event.trend_state)) return false
+    if (event.source_name === 'gdelt' && event.source_count < 2) return false
     return true
-  }), [events, activeTypes, minSeverity, minConfidence, activeTrends])
+  }), [events, timeWindow, activeTypes, minSeverity, minConfidence, activeTrends])
+
+  const filteredSignals = useMemo(() => mapSignals.filter(signal => {
+    if (!withinWindow(signal.observed_at, timeWindow)) return false
+    if (activeTypes.size > 0 && !activeTypes.has(signal.candidate_event_type)) return false
+    if (signal.severity_score < minSeverity) return false
+    if (signal.confidence_score < minConfidence) return false
+    return true
+  }), [mapSignals, timeWindow, activeTypes, minSeverity, minConfidence])
 
   const filteredHotspots = useMemo(
-    () => activeTrends.size === 0 ? hotspots : hotspots.filter(h => activeTrends.has(h.trend_state)),
-    [hotspots, activeTrends]
+    () => activeTrends.size === 0 ? hotspots : hotspots.filter(hotspot => activeTrends.has(hotspot.trend_state)),
+    [hotspots, activeTrends],
   )
 
   const filteredPriorities = useMemo(
-    () => activeTrends.size === 0 ? priorities : priorities.filter(p => activeTrends.has(p.trend_state)),
-    [priorities, activeTrends]
+    () => activeTrends.size === 0 ? priorities : priorities.filter(priority => activeTrends.has(priority.trend_state)),
+    [priorities, activeTrends],
   )
 
-  // Per-type counts from loaded events, applying all quality gates except the type filter.
-  // Gives the operator an honest "activation count" — what you'd see if you toggled that type.
   const eventTypeCounts = useMemo(() => {
     const counts = {}
-    for (const e of events) {
-      if (e.severity_score   < minSeverity)                            continue
-      if (e.confidence_score < minConfidence)                          continue
-      if (activeTrends.size  > 0 && !activeTrends.has(e.trend_state)) continue
-      if (e.source_name === 'gdelt' && e.source_count < 2)             continue
-      counts[e.event_type] = (counts[e.event_type] || 0) + 1
+    for (const event of events) {
+      if (!withinWindow(event.occurred_at, timeWindow)) continue
+      if (event.severity_score < minSeverity) continue
+      if (event.confidence_score < minConfidence) continue
+      if (activeTrends.size > 0 && !activeTrends.has(event.trend_state)) continue
+      if (event.source_name === 'gdelt' && event.source_count < 2) continue
+      counts[event.event_type] = (counts[event.event_type] || 0) + 1
     }
     return counts
-  }, [events, minSeverity, minConfidence, activeTrends])
+  }, [events, timeWindow, minSeverity, minConfidence, activeTrends])
 
-  // Clear selection when the selected item is filtered out
-  useEffect(() => {
-    if (!selectedItem) return
-    let canceled = false
-    if (selectedItem.type === 'event') {
-      if (!filteredEvents.find(e => e.id === selectedItem.data.id)) {
-        queueMicrotask(() => {
-          if (canceled) return
-          pendingEventId.current = null
-          setSelectedItem(null)
-          setEventDetail(null)
-          setEventDetailLoading(false)
-        })
-      }
-    } else {
-      if (!filteredHotspots.find(h => h.id === selectedItem.data.id)) {
-        queueMicrotask(() => {
-          if (canceled) return
-          pendingHotspotId.current = null
-          setSelectedItem(null)
-          setHotspotDetail(null)
-          setHotspotDetailLoading(false)
-        })
-      }
-    }
-    return () => { canceled = true }
-  }, [filteredEvents, filteredHotspots, selectedItem])
+  const activeFilterCount = (
+    activeTypes.size
+    + activeTrends.size
+    + (minSeverity > 0 ? 1 : 0)
+    + (minConfidence > 0 ? 1 : 0)
+    + (timeWindow !== 24 ? 1 : 0)
+  )
 
   return (
     <Shell
-      left={
-        <FilterRail
-          activeTypes={activeTypes}     onToggle={handleToggleType}
-          onClear={() => setActiveTypes(new Set())}
-          layersVisible={layersVisible} onToggleLayer={handleToggleLayer}
-          minSeverity={minSeverity}     onSetSeverity={setMinSeverity}
-          minConfidence={minConfidence} onSetConfidence={setMinConfidence}
-          activeTrends={activeTrends}   onToggleTrend={handleToggleTrend}
-          eventTypeCounts={eventTypeCounts}
+      top={
+        <>
+          <TopChrome
+            systemStatus={systemStatus}
+            lastPollFailed={lastPollFailed}
+            timeWindow={timeWindow}
+            onSetTimeWindow={setTimeWindow}
+            openPopover={setActivePopover}
+            activePopover={activePopover}
+          />
+          <ControlPopover
+            kind={activePopover}
+            activeTypes={activeTypes}
+            onToggleType={toggleType}
+            onClearTypes={() => setActiveTypes(new Set())}
+            minSeverity={minSeverity}
+            onSetSeverity={setMinSeverity}
+            minConfidence={minConfidence}
+            onSetConfidence={setMinConfidence}
+            activeTrends={activeTrends}
+            onToggleTrend={toggleTrend}
+            layersVisible={layersVisible}
+            onToggleLayer={toggleLayer}
+            eventTypeCounts={eventTypeCounts}
+          />
+        </>
+      }
+      tabs={
+        <WorkspaceTabs
+          activeWorkspace={activeWorkspace}
+          onSetWorkspace={handleSetWorkspace}
+          counts={{
+            events: eventTotal,
+            visibleEvents: filteredEvents.length,
+            signals: filteredSignals.length,
+            hotspots: filteredHotspots.length,
+          }}
+        />
+      }
+      nav={
+        <NavRail
+          activeWorkspace={activeWorkspace}
+          onSetWorkspace={handleSetWorkspace}
+          onShowSources={handleShowSources}
+          counts={{ leads: observations.length }}
         />
       }
       map={
         <MapPanel
           events={filteredEvents}
           hotspots={filteredHotspots}
+          signals={filteredSignals}
           selectedItem={selectedItem}
           onSelect={handleSelect}
+          onSignalSelect={handleSignalSelect}
           layersVisible={layersVisible}
         />
       }
       right={
-        <>
-          <PriorityList
-            priorities={filteredPriorities}
-            selectedItem={selectedItem}
-            onSelect={handleSelect}
-          />
-          <ObservationReview
-            observations={observations}
-            loading={observationsLoading}
-            busyId={observationBusyId}
-            error={observationError}
-            onPromote={handlePromoteObservation}
-            onDismiss={handleDismissObservation}
-            onLink={handleLinkObservation}
-          />
-          <DetailPane
-            item={selectedItem}
-            onClose={() => {
-              pendingHotspotId.current = null
-              pendingEventId.current = null
-              setSelectedItem(null)
-              setHotspotDetail(null)
-              setHotspotDetailLoading(false)
-              setEventDetail(null)
-              setEventDetailLoading(false)
-            }}
-            hotspotDetail={hotspotDetail}
-            hotspotDetailLoading={hotspotDetailLoading}
-            eventDetail={eventDetail}
-            eventDetailLoading={eventDetailLoading}
-          />
-        </>
+        <RightRail
+          activeTab={rightTab}
+          onSetTab={setRightTab}
+          priorities={filteredPriorities}
+          selectedItem={selectedItem}
+          onSelect={handleSelect}
+          detailProps={{
+            onClose: clearSelection,
+            hotspotDetail,
+            hotspotDetailLoading,
+            hotspotTrend,
+            eventDetail,
+            eventDetailLoading,
+            signals: filteredSignals,
+          }}
+          observations={observations}
+          observationsLoading={observationsLoading}
+          observationBusyId={observationBusyId}
+          observationError={observationError}
+          onPromoteObservation={handlePromoteObservation}
+          onDismissObservation={handleDismissObservation}
+          onLinkObservation={handleLinkObservation}
+          systemStatus={systemStatus}
+        />
       }
-      bottom={
-        <EventFeed
+      drawer={
+        <IncidentsDrawer
+          open={activeWorkspace === 'incidents'}
+          onClose={() => handleSetWorkspace('map')}
           events={filteredEvents}
           loadedCount={events.length}
           total={eventTotal}
@@ -424,10 +501,18 @@ export default function App() {
           loadingMore={eventsLoadingMore}
           selectedItem={selectedItem}
           onSelect={handleSelect}
+          signals={filteredSignals}
+          signalFocus={signalFocus}
         />
       }
       status={
-        <StatusBar lastUpdated={lastUpdated} loading={loading} systemStatus={systemStatus} lastPollFailed={lastPollFailed} />
+        <TelemetryBar
+          systemStatus={systemStatus}
+          lastUpdated={lastUpdated}
+          lastPollFailed={lastPollFailed}
+          activeFilterCount={activeFilterCount}
+          loading={loading}
+        />
       }
     />
   )

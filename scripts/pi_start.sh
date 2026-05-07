@@ -8,7 +8,7 @@
 # Launches the Flashpoint desktop shell with Pi-appropriate runtime settings:
 #   FLASHPOINT_MANAGED=1    — backend is managed by systemd, not subprocess
 #   FLASHPOINT_FULLSCREEN=1 — fullscreen window (Pi Touch Display 2)
-#   FLASHPOINT_DEV_QUIT=1   — on-screen close button + Ctrl+Q shortcut enabled
+#   FLASHPOINT_DEV_QUIT=0   — hide on-screen close button in normal kiosk runs
 #   FLASHPOINT_BACKEND_HEALTH_URL — explicit 127.0.0.1 to avoid localhost→::1 (IPv6)
 #
 # Duplicate-instance guard: flock on /tmp/flashpoint-shell.lock prevents a
@@ -40,7 +40,9 @@ fi
 
 export FLASHPOINT_MANAGED=1      # backend managed by systemd — skip subprocess management
 export FLASHPOINT_FULLSCREEN=1   # fullscreen for Pi Touch Display 2
-export FLASHPOINT_DEV_QUIT=1     # show on-screen close button and Ctrl+Q shortcut
+# Hide the native close affordance in kiosk mode. For maintenance sessions, run
+# with FLASHPOINT_DEV_QUIT=1 to show the close button and enable Ctrl+Q.
+export FLASHPOINT_DEV_QUIT="${FLASHPOINT_DEV_QUIT:-0}"
 
 # Explicit 127.0.0.1 — avoids localhost→::1 (IPv6) resolution ambiguity on Linux
 export FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health

@@ -4,8 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import Event, Hotspot, IngestRun
+from app.models import Event, Hotspot, IngestRun, Observation
 from app.schemas import SystemStatusResponse
+from app.services.intelligence import eligible_map_signals
 from app.utils.time import to_utc, utcnow, utcnow_naive
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -17,6 +18,8 @@ def system_status(db: Session = Depends(get_db)):
     last_computed = db.query(func.max(Hotspot.last_computed_at)).scalar()
     event_count   = db.query(func.count(Event.id)).filter(Event.is_active == True).scalar() or 0
     hotspot_count = db.query(func.count(Hotspot.id)).scalar() or 0
+    lead_count = db.query(func.count(Observation.id)).filter(Observation.status == "lead").scalar() or 0
+    mapped_signal_count = len(eligible_map_signals(db))
 
     # Most recent run of any status — filtered to the configured source
     last_run = (
@@ -59,6 +62,9 @@ def system_status(db: Session = Depends(get_db)):
         last_success_at=last_success_at,
         last_run_status=last_run.status if last_run else None,
         last_error=last_error,
+        lead_count=lead_count,
+        exception_count=lead_count,
+        mapped_signal_count=mapped_signal_count,
         generated_at=utcnow_naive(),
         db_path=settings.database_url,
     )

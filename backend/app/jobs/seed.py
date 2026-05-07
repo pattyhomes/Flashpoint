@@ -2,14 +2,19 @@ import json
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models import Event, EventSource, Hotspot, IngestRun, Observation
+from app.models import Event, EventSource, EvidenceItem, Hotspot, IngestRun, Observation
 from app.services.ingestion.deduper import (
     find_matching_event,
     is_duplicate,
     is_syndicated_copy,
 )
 from app.services.ingestion.mock_source import MockSource
-from app.services.intelligence import record_evidence, record_observation
+from app.services.intelligence import (
+    apply_observation_automation,
+    link_observation_to_event,
+    record_evidence,
+    record_observation,
+)
 from app.services.scoring.hotspot import compute_hotspots
 from app.utils.time import utcnow_naive as utcnow
 
@@ -235,7 +240,6 @@ def run_eventregistry_ingestion():
 
             if matched_event is not None:
                 # --- Corroboration path ---
-                # Load existing sources for this event
                 existing_sources = (
                     db.query(EventSource)
                     .filter(EventSource.event_id == matched_event.id)
@@ -251,39 +255,10 @@ def run_eventregistry_ingestion():
                     existing_sources=existing_sources,
                 )
 
-                trust_weight = 0.0 if syndicated_copy else 1.0
-
-                db.add(EventSource(
-                    event_id=matched_event.id,
-                    source_type="eventregistry",
-                    source_record_id=er_uri,
-                    source_name=outlet_name,
-                    source_url=article_url,
-                    source_title=article_title,
-                    source_published_at=published_at,
-                    source_trust_weight=trust_weight,
-                    location_precision=event_schema.location_precision,
-                    metadata_json=event_schema.raw_payload_json,
-                ))
-
-                if not syndicated_copy:
-                    # Independent corroborating source: increment count, uplift confidence
-                    matched_event.source_count = (matched_event.source_count or 1) + 1
-                    matched_event.confidence_score = round(
-                        min(1.0, (matched_event.confidence_score or 0.0) + 0.08), 3
-                    )
-                    corroborated += 1
-                    print(
-                        f"[eventregistry] Corroborated event #{matched_event.id}: "
-                        f"'{matched_event.title[:60]}' (+1 source)"
-                    )
-                else:
-                    syndicated += 1
-
                 observation = record_observation(
                     db,
                     evidence=evidence,
-                    status="linked",
+                    status="lead",
                     title=event_schema.title,
                     summary=event_schema.summary,
                     candidate_event_type=event_schema.event_type,
@@ -297,12 +272,37 @@ def run_eventregistry_ingestion():
                     severity_score=event_schema.severity_score,
                     location_precision=event_schema.location_precision,
                 )
-                observation.linked_event_id = matched_event.id
+                if syndicated_copy:
+                    db.add(EventSource(
+                        event_id=matched_event.id,
+                        source_type="eventregistry",
+                        source_record_id=er_uri,
+                        source_name=outlet_name,
+                        source_url=article_url,
+                        source_title=article_title,
+                        source_published_at=published_at,
+                        source_trust_weight=0.0,
+                        location_precision=event_schema.location_precision,
+                        metadata_json=event_schema.raw_payload_json,
+                    ))
+                    observation.status = "linked"
+                    observation.linked_event_id = matched_event.id
+                    observation.updated_at = utcnow()
+                    syndicated += 1
+                else:
+                    before_count = matched_event.source_count or 1
+                    link_observation_to_event(db, observation.id, matched_event.id)
+                    if (matched_event.source_count or 1) > before_count:
+                        corroborated += 1
+                        print(
+                            f"[eventregistry] Corroborated event #{matched_event.id}: "
+                            f"'{matched_event.title[:60]}' (+1 source family)"
+                        )
 
             else:
                 # --- Discovery path ---
                 if not settings.event_registry_create_new_events:
-                    record_observation(
+                    observation = record_observation(
                         db,
                         evidence=evidence,
                         status="lead",
@@ -319,9 +319,10 @@ def run_eventregistry_ingestion():
                         severity_score=event_schema.severity_score,
                         location_precision=event_schema.location_precision,
                     )
+                    apply_observation_automation(db, observation)
                     continue
                 if new_events_this_run >= settings.event_registry_max_new_events_per_run:
-                    record_observation(
+                    observation = record_observation(
                         db,
                         evidence=evidence,
                         status="lead",
@@ -338,6 +339,7 @@ def run_eventregistry_ingestion():
                         severity_score=event_schema.severity_score,
                         location_precision=event_schema.location_precision,
                     )
+                    apply_observation_automation(db, observation)
                     continue
 
                 # Apply tiered uncorroborated confidence cap
@@ -446,6 +448,7 @@ def run_observation_source_ingestion(source_name: str):
     try:
         candidates = factory().fetch()
         before_count = db.query(Observation).count()
+        confirmed_changed = False
         for candidate in candidates:
             evidence = record_evidence(
                 db,
@@ -459,7 +462,7 @@ def run_observation_source_ingestion(source_name: str):
                 trust_tier=candidate.trust_tier,
                 raw_payload=candidate.raw_payload,
             )
-            record_observation(
+            observation = record_observation(
                 db,
                 evidence=evidence,
                 status=candidate.status,
@@ -476,6 +479,8 @@ def run_observation_source_ingestion(source_name: str):
                 severity_score=candidate.severity_score,
                 location_precision=candidate.location_precision,
             )
+            if apply_observation_automation(db, observation) is not None:
+                confirmed_changed = True
 
         db.commit()
         inserted = db.query(Observation).count() - before_count
@@ -484,6 +489,8 @@ def run_observation_source_ingestion(source_name: str):
         run.finished_at = utcnow()
         run.events_inserted = inserted
         db.commit()
+        if confirmed_changed:
+            compute_hotspots(db)
         print(f"[{ingest_source}] Recorded {inserted} observation(s).")
     except Exception as e:
         db.rollback()
@@ -505,6 +512,9 @@ def reset_and_seed():
 
     db = SessionLocal()
     try:
+        db.query(EventSource).delete()
+        db.query(Observation).delete()
+        db.query(EvidenceItem).delete()
         db.query(Hotspot).delete()
         db.query(Event).delete()
         db.commit()

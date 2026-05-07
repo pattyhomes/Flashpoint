@@ -1,73 +1,89 @@
-/* ── Shell Grid ── */
-.shell {
-  display: grid;
-  grid-template-columns: var(--left-w) 1fr var(--right-w);
-  grid-template-rows: 1fr var(--bottom-h) var(--status-h);
-  grid-template-areas:
-    "left   map    right"
-    "left   bottom right"
-    "status status status";
-  height: 100vh;
+.workstation {
   width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--right-w);
+  grid-template-rows: var(--top-h) var(--tabs-h) minmax(0, 1fr) var(--bottom-h);
+  grid-template-areas:
+    "top top top"
+    "tabs tabs tabs"
+    "nav map right"
+    "telemetry telemetry telemetry";
   overflow: hidden;
   isolation: isolate;
+  background:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px),
+    var(--s-0);
+  background-size: 48px 48px;
 }
 
-.shell__left {
-  grid-area: left;
-  background: var(--surface-1);
-  border-right: 1px solid var(--surface-border);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+.workstation__top {
+  grid-area: top;
   position: relative;
-  z-index: 20;
+  z-index: 40;
+  background: linear-gradient(180deg, #0c111a, #070a0f);
+  border-bottom: 1px solid var(--line);
   pointer-events: auto;
-  touch-action: pan-y;
 }
 
-.shell__map {
+.workstation__tabs {
+  grid-area: tabs;
+  position: relative;
+  z-index: 35;
+  background: #070a0f;
+  border-bottom: 1px solid var(--line);
+  pointer-events: auto;
+}
+
+.workstation__nav {
+  grid-area: nav;
+  position: relative;
+  z-index: 30;
+  background: linear-gradient(180deg, #080d14, #05070b);
+  border-right: 1px solid var(--line);
+  pointer-events: auto;
+}
+
+.workstation__map {
   grid-area: map;
-  background: var(--surface-0);
   position: relative;
-  overflow: hidden;
   z-index: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--s-0);
   pointer-events: auto;
 }
 
-.shell__right {
+.workstation__right {
   grid-area: right;
-  background: var(--surface-1);
-  border-left: 1px solid var(--surface-border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
   position: relative;
-  z-index: 20;
+  z-index: 30;
+  min-height: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(13,18,26,0.98), rgba(7,10,15,0.98));
+  border-left: 1px solid var(--line);
   pointer-events: auto;
-  touch-action: pan-y;
 }
 
-.shell__bottom {
-  grid-area: bottom;
-  background: var(--surface-1);
-  border-top: 1px solid var(--surface-border);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  z-index: 20;
+.workstation__drawer {
+  position: absolute;
+  z-index: 34;
+  top: calc(var(--top-h) + var(--tabs-h));
+  left: var(--nav-w);
+  bottom: var(--bottom-h);
+  width: min(var(--drawer-w), calc(100vw - var(--nav-w) - var(--right-w) - 16px));
   pointer-events: auto;
-  touch-action: pan-y;
 }
 
-.shell__status {
-  grid-area: status;
-  background: var(--surface-2);
-  border-top: 1px solid var(--surface-border);
+.workstation__telemetry {
+  grid-area: telemetry;
   position: relative;
-  z-index: 20;
+  z-index: 40;
+  background: #070a0f;
+  border-top: 1px solid var(--line);
   pointer-events: auto;
-  touch-action: manipulation;
 }
 
 [data-map-overlay],
@@ -77,6 +93,15 @@
 
 [data-map-overlay] button,
 [data-map-overlay] a,
+[data-map-overlay] summary,
+[data-map-overlay] input,
 [data-map-overlay] [role='button'] {
   touch-action: manipulation;
+}
+
+@media (max-width: 980px) {
+  :root {
+    --right-w: 300px;
+    --drawer-w: 440px;
+  }
 }

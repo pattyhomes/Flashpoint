@@ -174,6 +174,39 @@ def test_dismiss_observation_hides_it_from_lead_queue(db):
     assert observation.status == "dismissed"
 
 
+def test_dismissed_observation_is_not_recreated_for_same_evidence(db):
+    evidence = record_evidence(
+        db,
+        source_type="bluesky",
+        source_record_id="post-dismissed",
+        source_name="Bluesky",
+        source_title="Possible road blockage",
+        trust_tier="weak",
+    )
+    observation = record_observation(
+        db,
+        evidence=evidence,
+        status="lead",
+        title="Possible road blockage",
+        candidate_event_type="disruption",
+        confidence_score=0.4,
+    )
+    dismiss_observation(db, observation.id)
+
+    second = record_observation(
+        db,
+        evidence=evidence,
+        status="lead",
+        title="Possible road blockage",
+        candidate_event_type="disruption",
+        confidence_score=0.4,
+    )
+
+    assert second.id == observation.id
+    assert second.status == "dismissed"
+    assert db.query(Observation).count() == 1
+
+
 def test_link_observation_corroborates_existing_event(db):
     event = Event(
         source_id="gdelt-existing",

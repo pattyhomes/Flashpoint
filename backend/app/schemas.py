@@ -122,6 +122,11 @@ class ObservationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MapSignalOut(ObservationOut):
+    source_family: str
+    signal_weight: float
+
+
 class HotspotOut(BaseModel):
     id: int
     name: str | None
@@ -151,6 +156,19 @@ class HotspotDetailOut(HotspotOut):
     member_events: list[EventOut] = []
 
 
+class HotspotTrendBucket(BaseModel):
+    bucket_start: datetime
+    event_count: int
+    max_severity: float
+    avg_severity: float
+
+
+class HotspotTrendOut(BaseModel):
+    hotspot_id: int
+    hours: int
+    buckets: list[HotspotTrendBucket]
+
+
 class HealthResponse(BaseModel):
     status: str
     service: str
@@ -170,5 +188,8 @@ class SystemStatusResponse(BaseModel):
     last_success_at:  datetime | None   # when the most recent successful run finished
     last_run_status:  str | None        # "success" | "failed" | "running" | null
     last_error:       str | None        # error from most recent run if it failed; else null
+    lead_count: int
+    exception_count: int
+    mapped_signal_count: int
     generated_at: datetime
     db_path: str

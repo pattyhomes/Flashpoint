@@ -10,6 +10,7 @@ import app.jobs.seed as seed_module
 from app.database import Base
 from app.models import Event, EvidenceItem, IngestRun, Observation
 from app.schemas import EventCreate
+from app.services.ingestion.base import ObservationCandidate
 
 
 @pytest.fixture
@@ -158,3 +159,45 @@ def test_eventregistry_corroboration_records_linked_observation(db_engine):
     assert observation.status == "linked"
     assert observation.linked_event_id == event_id
     assert updated.source_count == 2
+
+
+def test_observation_source_auto_promotion_recomputes_hotspots(db_engine):
+    Session = sessionmaker(bind=db_engine)
+    candidate = ObservationCandidate(
+        source_type="acled",
+        source_record_id="acled-1",
+        source_url="https://example.com/acled",
+        source_name="ACLED",
+        source_title="Protest reported in Philadelphia",
+        excerpt="A protest was reported in Philadelphia.",
+        published_at=datetime(2026, 5, 7, 12, 0, 0),
+        trust_tier="acled",
+        raw_payload={"id": "acled-1"},
+        status="lead",
+        title="Protest reported in Philadelphia",
+        summary="A protest was reported in Philadelphia.",
+        candidate_event_type="protest",
+        latitude=39.9526,
+        longitude=-75.1652,
+        city="Philadelphia",
+        state="PA",
+        observed_at=datetime(2026, 5, 7, 12, 0, 0),
+        confidence_score=0.75,
+        severity_score=0.45,
+        location_precision="city",
+    )
+
+    with (
+        patch("app.jobs.seed.SessionLocal", side_effect=lambda: Session()),
+        patch("app.services.ingestion.acled_source.AcledSource.fetch", return_value=[candidate]),
+        patch("app.jobs.seed.compute_hotspots") as compute_hotspots,
+    ):
+        seed_module.run_observation_source_ingestion("acled")
+
+    session = new_session(db_engine)
+    assert session.query(Event).count() == 1
+    observation = session.query(Observation).one()
+    session.close()
+
+    assert observation.status == "promoted"
+    compute_hotspots.assert_called_once()

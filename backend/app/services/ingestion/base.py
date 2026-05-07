@@ -29,6 +29,10 @@ class ObservationCandidate:
     confidence_score: float = 0.0
     severity_score: float = 0.0
     location_precision: str | None = None
+    location_confidence: float = 1.0
+    location_reason: str | None = None
+    exception_category: str | None = None
+    exception_detail: str | None = None
 
 
 class BaseSource(ABC):

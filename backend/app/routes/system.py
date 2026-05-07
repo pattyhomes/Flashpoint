@@ -20,6 +20,22 @@ def system_status(db: Session = Depends(get_db)):
     hotspot_count = db.query(func.count(Hotspot.id)).scalar() or 0
     lead_count = db.query(func.count(Observation.id)).filter(Observation.status == "lead").scalar() or 0
     mapped_signal_count = len(eligible_map_signals(db))
+    exception_counts = {
+        category: count
+        for category, count in (
+            db.query(Observation.exception_category, func.count(Observation.id))
+            .filter(Observation.exception_category.isnot(None), Observation.status == "lead")
+            .group_by(Observation.exception_category)
+            .all()
+        )
+    }
+    source_count = (
+        db.query(func.count(func.distinct(IngestRun.ingest_source)))
+        .filter(IngestRun.ingest_source.isnot(None))
+        .scalar()
+        or 0
+    )
+    unhealthy_source_count = _unhealthy_source_count(db)
 
     # Most recent run of any status — filtered to the configured source
     last_run = (
@@ -65,6 +81,48 @@ def system_status(db: Session = Depends(get_db)):
         lead_count=lead_count,
         exception_count=lead_count,
         mapped_signal_count=mapped_signal_count,
+        source_count=source_count,
+        unhealthy_source_count=unhealthy_source_count,
+        exception_counts=exception_counts,
         generated_at=utcnow_naive(),
         db_path=settings.database_url,
     )
+
+
+def _unhealthy_source_count(db: Session) -> int:
+    source_names = [
+        row[0]
+        for row in db.query(IngestRun.ingest_source).filter(IngestRun.ingest_source.isnot(None)).distinct().all()
+    ]
+    unhealthy = 0
+    for source_name in source_names:
+        last_run = (
+            db.query(IngestRun)
+            .filter(IngestRun.ingest_source == source_name)
+            .order_by(IngestRun.started_at.desc())
+            .first()
+        )
+        last_success = (
+            db.query(IngestRun)
+            .filter(IngestRun.ingest_source == source_name, IngestRun.status == "success")
+            .order_by(IngestRun.finished_at.desc())
+            .first()
+        )
+        if last_run and last_run.status == "failed":
+            unhealthy += 1
+        elif last_success is None:
+            unhealthy += 1
+        elif (utcnow() - to_utc(last_success.finished_at)).total_seconds() > _source_interval(source_name) * 2:
+            unhealthy += 1
+    return unhealthy
+
+
+def _source_interval(source_name: str) -> int:
+    return {
+        "eventregistry": settings.event_registry_interval_seconds,
+        "nws": settings.nws_alerts_interval_seconds,
+        "bluesky": settings.bluesky_interval_seconds,
+        "mastodon": settings.mastodon_interval_seconds,
+        "local_news": settings.local_news_interval_seconds,
+        "acled": settings.acled_interval_seconds,
+    }.get(source_name, settings.ingestion_interval_seconds)

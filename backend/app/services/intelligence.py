@@ -6,12 +6,15 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models import Event, EventSource, EvidenceItem, Observation
 from app.services.ingestion.deduper import find_matching_event
 from app.services.ai_embeddings import embed_text
 from app.utils.time import utcnow_naive as utcnow
 
 SIGNAL_CONFIDENCE_MIN = 0.45
+SIGNAL_LOCATION_CONFIDENCE_MIN = 0.65
+AUTO_PROMOTE_LOCATION_CONFIDENCE_MIN = 0.75
 SIGNAL_PRECISIONS = {"venue", "city"}
 SIGNAL_EVENT_TYPES = {
     "protest",
@@ -158,6 +161,30 @@ def _observation_ready_for_event(observation: Observation) -> bool:
     )
 
 
+def _location_confidence(observation: Observation) -> float:
+    return observation.location_confidence if observation.location_confidence is not None else 0.0
+
+
+def _location_quality_allows_signal(observation: Observation) -> bool:
+    return _location_confidence(observation) >= SIGNAL_LOCATION_CONFIDENCE_MIN
+
+
+def _location_quality_allows_event(observation: Observation) -> bool:
+    return _location_confidence(observation) >= AUTO_PROMOTE_LOCATION_CONFIDENCE_MIN
+
+
+def _exception_for_observation(observation: Observation, family: str | None = None) -> tuple[str | None, str | None]:
+    if observation.location_precision and not _location_quality_allows_signal(observation):
+        return "bad_location", "Location confidence is below map-signal threshold."
+    if observation.confidence_score < SIGNAL_CONFIDENCE_MIN:
+        return "low_confidence", "Observation confidence is below map-signal threshold."
+    if family == "context" or observation.status == "context":
+        return "context_only", "Context records do not affect unrest scoring."
+    if family == "social":
+        return "social_only", "Social records remain weak signals until corroborated."
+    return None, None
+
+
 def _signal_weight(observation: Observation, family: str) -> float:
     family_weight = {
         "acled": 1.0,
@@ -181,6 +208,8 @@ def is_map_signal_eligible(observation: Observation, evidence: EvidenceItem | No
     if observation.candidate_event_type not in SIGNAL_EVENT_TYPES:
         return False
     if not _observation_ready_for_event(observation):
+        return False
+    if not _location_quality_allows_signal(observation):
         return False
     family = source_family(evidence.source_type if evidence else None, evidence.trust_tier if evidence else None)
     return family not in {"context", "unknown"}
@@ -242,6 +271,10 @@ def record_observation(
     confidence_score: float = 0.0,
     severity_score: float = 0.0,
     location_precision: str | None = None,
+    location_confidence: float = 1.0,
+    location_reason: str | None = None,
+    exception_category: str | None = None,
+    exception_detail: str | None = None,
 ) -> Observation:
     existing = (
         db.query(Observation)
@@ -251,6 +284,16 @@ def record_observation(
     if existing is not None:
         return existing
 
+    family = source_family(evidence.source_type, evidence.trust_tier)
+    inferred_category, inferred_detail = _exception_for_observation(
+        type("ObservationPreview", (), {
+            "location_precision": location_precision,
+            "location_confidence": location_confidence,
+            "confidence_score": confidence_score,
+            "status": status,
+        })(),
+        family,
+    )
     observation = Observation(
         evidence_id=evidence.id,
         status=status,
@@ -266,6 +309,10 @@ def record_observation(
         observed_at=observed_at,
         confidence_score=confidence_score,
         severity_score=severity_score,
+        location_confidence=location_confidence,
+        location_reason=location_reason,
+        exception_category=exception_category or inferred_category,
+        exception_detail=exception_detail or inferred_detail,
         updated_at=utcnow(),
     )
     db.add(observation)
@@ -300,6 +347,7 @@ def _add_event_source_if_missing(
     event: Event,
     evidence: EvidenceItem,
     observation: Observation,
+    allow_counted: bool = True,
 ) -> bool:
     existing = (
         db.query(EventSource)
@@ -314,7 +362,7 @@ def _add_event_source_if_missing(
         return False
 
     family = source_family(evidence.source_type, evidence.trust_tier)
-    trust_weight = 0.0 if family in {"context", "social"} else 1.0
+    trust_weight = 0.0 if family in {"context", "social"} or not allow_counted else 1.0
     db.add(
         EventSource(
             event_id=event.id,
@@ -356,6 +404,8 @@ def promote_observation(db: Session, observation_id: int) -> Event:
         raise ValueError("Observation cannot be promoted without observed_at")
     if not observation.candidate_event_type:
         raise ValueError("Observation cannot be promoted without candidate_event_type")
+    if not _location_quality_allows_event(observation):
+        raise ValueError("Observation cannot be promoted with low location confidence")
 
     event = Event(
         source_id=f"obs-{observation.id}",
@@ -408,12 +458,17 @@ def link_observation_to_event(db: Session, observation_id: int, event_id: int) -
     evidence = _observation_evidence(db, observation)
     family = source_family(evidence.source_type, evidence.trust_tier)
     families_before = _event_source_families(db, event)
+    counted_allowed = _location_quality_allows_event(observation)
+    if not counted_allowed:
+        observation.exception_category = observation.exception_category or "bad_location"
+        observation.exception_detail = observation.exception_detail or "Location confidence is below linked-source threshold."
 
     counted = _add_event_source_if_missing(
         db,
         event=event,
         evidence=evidence,
         observation=observation,
+        allow_counted=counted_allowed,
     )
     if counted and family not in families_before:
         event.source_count = (event.source_count or 1) + 1
@@ -461,7 +516,33 @@ def _observations_match(a: Observation, b: Observation) -> bool:
         return False
     if _haversine_miles(a.latitude, a.longitude, b.latitude, b.longitude) > 50:
         return False
-    return _jaccard(_tokens(a.title), _tokens(b.title)) >= 0.25
+    lexical_match = _jaccard(_tokens(a.title), _tokens(b.title)) >= 0.25
+    return lexical_match or _semantic_match(a, b)
+
+
+def _semantic_match(a: Observation, b: Observation) -> bool:
+    a_vector = _embedding_vector(getattr(a, "evidence", None))
+    b_vector = _embedding_vector(getattr(b, "evidence", None))
+    if not a_vector or not b_vector or len(a_vector) != len(b_vector):
+        return False
+    dot = sum(x * y for x, y in zip(a_vector, b_vector))
+    a_norm = math.sqrt(sum(x * x for x in a_vector))
+    b_norm = math.sqrt(sum(y * y for y in b_vector))
+    if a_norm == 0 or b_norm == 0:
+        return False
+    return (dot / (a_norm * b_norm)) >= settings.semantic_duplicate_threshold
+
+
+def _embedding_vector(evidence: EvidenceItem | None) -> list[float] | None:
+    if evidence is None or not evidence.embedding_json:
+        return None
+    try:
+        value = json.loads(evidence.embedding_json)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(value, list) and all(isinstance(item, (int, float)) for item in value):
+        return [float(item) for item in value]
+    return None
 
 
 def _matching_lead_observations(db: Session, observation: Observation) -> list[Observation]:
@@ -480,6 +561,9 @@ def _matching_lead_observations(db: Session, observation: Observation) -> list[O
         )
         .all()
     )
+    for candidate in candidates:
+        candidate.evidence = _observation_evidence(db, candidate)
+    observation.evidence = _observation_evidence(db, observation)
     return [candidate for candidate in candidates if _observations_match(observation, candidate)]
 
 
@@ -514,6 +598,12 @@ def apply_observation_automation(db: Session, observation: Observation) -> Event
     if observation.status != "lead":
         return None
     if not _observation_ready_for_event(observation):
+        return None
+    if not _location_quality_allows_event(observation):
+        observation.exception_category = "bad_location"
+        observation.exception_detail = "Location confidence is below auto-promotion threshold."
+        observation.updated_at = utcnow()
+        db.flush()
         return None
 
     evidence = _observation_evidence(db, observation)

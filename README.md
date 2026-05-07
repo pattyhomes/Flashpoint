@@ -12,7 +12,7 @@
 [![MapLibre GL](https://img.shields.io/badge/MapLibre_GL-5.21-396CB2)](https://maplibre.org)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003b57?logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry_Pi-5-c51a4a?logo=raspberry-pi&logoColor=white)](https://raspberrypi.com)
-[![Tests](https://img.shields.io/badge/tests-134_passing-22c55e)](backend/tests/)
+[![Tests](https://img.shields.io/badge/tests-145_passing-22c55e)](backend/tests/)
 
 </div>
 
@@ -32,10 +32,11 @@ The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs e
 
 ## Features
 
-- **Multi-source ingestion** — GDELT 2.0 (free, 15-min cadence) and Event Registry (API key, supplementary). Mock source for dev and demo.
+- **Multi-source ingestion** — GDELT 2.0 (free, 15-min cadence), Event Registry (API key, supplementary), NWS context, Bluesky/Mastodon weak signals, optional ACLED, and configured Local News/RSS feeds. Mock source for dev and demo.
 - **Deterministic classifier** — four-signal NLP pipeline (title keywords, body keywords, DMOZ categories, Wikipedia concepts). No LLM, no external calls. Classifies into 8 event types: `protest`, `riot`, `political_violence`, `police_clash`, `vandalism_tied_to_unrest`, `crowd_disruption`, `protest_related_road_shutdown`, `unrest`.
 - **Three-layer deduplication** — exact `source_id` match → cross-source similarity (haversine + time window + Jaccard title) → syndicated copy detection (6 rules: same outlet, wire family, title similarity, wire domain URL, timestamp proximity, ER event URI grouping).
 - **Evidence-first intelligence model** — raw sources create `EvidenceItem` and `Observation` records first. Safe independent-family corroboration can auto-link/promote; weak social volume remains signal heat until corroborated.
+- **Stage 1.5 data-quality controls** — observation location confidence/reasons, exception categories, source run stats, source health API, and a starter local U.S. city/county/state geocoder keep bad geography and noisy sources out of hotspots.
 - **Corroboration model** — each independent source family can add confidence. Syndicated wire republications (AP, Reuters, UPI, AFP, CNN, NBC) add zero. Uncorroborated ER-only events are confidence-capped by location precision tier (venue: 0.62, city: 0.58, state: 0.45).
 - **Geographic hotspot clustering** — two-pass greedy radius algorithm (75-mile metro radius, 72-hour event window). City/venue events anchor and merge in pass 1; state-level signals fall back to pass 2 state grouping. Pruned to minimum 3 events, capped at 15 hotspots.
 - **Proximity-weighted hotspot naming** — ranks candidate city names by `count / (1 + mean_distance / 50mi)` so the closest, most-frequent city wins. Falls back to county → state region → coordinates.
@@ -45,7 +46,7 @@ The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs e
 - **60-second polling with selection reconciliation** — hotspots, priorities, and system status refresh automatically. If the selected hotspot is recomputed away (ID reuse), the selection is transparently cleared.
 - **Operator status surface** — status bar shows data freshness, staleness detection, run-failed alerts, and ingest-cycle sync indicators.
 - **Touch-ready Pi appliance** — systemd user service + XDG autostart + fullscreen Qt shell with native connecting/unavailable overlay states. No browser chrome, no accounts, no cloud.
-- **134 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming, evidence workflows, map signals, and hotspot trend buckets.
+- **145 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming, evidence workflows, source health, geocoding, map signals, and hotspot trend buckets.
 
 ---
 
@@ -56,11 +57,13 @@ graph TD
     subgraph Sources
         G[GDELT 2.0<br/>15-min CSVs]
         ER[Event Registry<br/>API]
+        OBS[NWS / Social / RSS<br/>observations]
         M[Mock Source<br/>dev/demo]
     end
 
     subgraph "Backend — FastAPI + APScheduler"
         CL[Deterministic<br/>Classifier]
+        GEO[Local Geocoder<br/>confidence + reason]
         DD[3-Layer<br/>Deduplicator]
         CB[Corroboration<br/>Engine]
         DB[(SQLite<br/>flashpoint.db)]
@@ -86,8 +89,10 @@ graph TD
 
     G --> CL
     ER --> CL
+    OBS --> CL
+    CL --> GEO
     M --> DD
-    CL --> DD
+    GEO --> DD
     DD --> CB
     CB --> DB
     DB --> HS

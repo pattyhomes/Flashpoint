@@ -45,6 +45,7 @@ def start_scheduler():
         ("nws", settings.nws_alerts_enabled, settings.nws_alerts_interval_seconds),
         ("bluesky", settings.bluesky_enabled, settings.bluesky_interval_seconds),
         ("mastodon", settings.mastodon_enabled and bool(settings.mastodon_access_token), settings.mastodon_interval_seconds),
+        ("local_news", settings.local_news_enabled and bool(settings.local_news_feed_urls), settings.local_news_interval_seconds),
         ("acled", settings.acled_enabled and bool(settings.acled_api_key), settings.acled_interval_seconds),
     ]
     for source_name, enabled, interval in observation_jobs:

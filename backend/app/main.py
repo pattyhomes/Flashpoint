@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from app.database import engine, init_db
 from app.jobs.scheduler import start_scheduler, stop_scheduler
-from app.routes import events, health, hotspots, observations, priorities, system
+from app.routes import events, health, hotspots, observations, priorities, sources, system
 
 
 def _migrate():
@@ -21,6 +21,15 @@ def _migrate():
             "ALTER TABLE ingest_runs ADD COLUMN ingest_source VARCHAR(32)",
             "ALTER TABLE events ADD COLUMN location_precision VARCHAR(32)",
             "ALTER TABLE evidence_items ADD COLUMN embedding_json TEXT",
+            "ALTER TABLE observations ADD COLUMN location_confidence FLOAT NOT NULL DEFAULT 1.0",
+            "ALTER TABLE observations ADD COLUMN location_reason VARCHAR(255)",
+            "ALTER TABLE observations ADD COLUMN exception_category VARCHAR(64)",
+            "ALTER TABLE observations ADD COLUMN exception_detail TEXT",
+            "ALTER TABLE ingest_runs ADD COLUMN records_fetched INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE ingest_runs ADD COLUMN evidence_inserted INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE ingest_runs ADD COLUMN observations_inserted INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE ingest_runs ADD COLUMN records_rejected INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE ingest_runs ADD COLUMN reject_counts_json TEXT",
         ]:
             try:
                 conn.execute(text(stmt))
@@ -57,6 +66,7 @@ app.include_router(events.router, prefix="/api/v1")
 app.include_router(observations.router, prefix="/api/v1")
 app.include_router(hotspots.router, prefix="/api/v1")
 app.include_router(priorities.router, prefix="/api/v1")
+app.include_router(sources.router, prefix="/api/v1")
 app.include_router(system.router, prefix="/api/v1")
 
 _logger = logging.getLogger(__name__)

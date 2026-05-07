@@ -7,6 +7,15 @@ from app.services.ingestion.base import ObservationCandidate
 from app.services.ingestion.classifier import classify
 
 
+DEFAULT_QUERY_PACK = (
+    "protest",
+    "demonstration",
+    "march downtown",
+    "police clash protest",
+    "road blocked protest",
+)
+
+
 def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -20,10 +29,17 @@ class BlueskySource:
     source_name = "bluesky"
 
     def fetch(self) -> list[ObservationCandidate]:
+        candidates_by_record: dict[str | None, ObservationCandidate] = {}
+        for query in _queries():
+            for candidate in self._fetch_query(query):
+                candidates_by_record.setdefault(candidate.source_record_id, candidate)
+        return list(candidates_by_record.values())
+
+    def _fetch_query(self, query: str) -> list[ObservationCandidate]:
         try:
             resp = httpx.get(
                 "https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts",
-                params={"q": settings.bluesky_query, "limit": settings.bluesky_max_records},
+                params={"q": query, "limit": settings.bluesky_max_records},
                 timeout=30,
             )
             resp.raise_for_status()
@@ -65,3 +81,9 @@ class BlueskySource:
                 )
             )
         return candidates
+
+
+def _queries() -> list[str]:
+    configured = settings.bluesky_query_pack
+    queries = [part.strip() for part in configured.split(",") if part.strip()]
+    return queries or list(DEFAULT_QUERY_PACK)

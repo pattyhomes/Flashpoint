@@ -110,6 +110,10 @@ class ObservationOut(BaseModel):
     latitude: float | None
     longitude: float | None
     location_precision: str | None
+    location_confidence: float
+    location_reason: str | None
+    exception_category: str | None
+    exception_detail: str | None
     observed_at: datetime | None
     confidence_score: float
     severity_score: float
@@ -191,5 +195,28 @@ class SystemStatusResponse(BaseModel):
     lead_count: int
     exception_count: int
     mapped_signal_count: int
+    source_count: int = 0
+    unhealthy_source_count: int = 0
+    exception_counts: dict[str, int] = {}
     generated_at: datetime
     db_path: str
+
+
+class SourceStatusOut(BaseModel):
+    source_name: str
+    status: str
+    last_run_at: datetime | None
+    last_success_at: datetime | None
+    last_error: str | None
+    records_fetched: int
+    evidence_inserted: int
+    observations_inserted: int
+    records_rejected: int
+    reject_counts: dict[str, int]
+    stale: bool
+
+
+class SourcesStatusResponse(BaseModel):
+    sources: list[SourceStatusOut]
+    exception_counts: dict[str, int]
+    generated_at: datetime

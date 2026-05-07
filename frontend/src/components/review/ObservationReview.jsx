@@ -5,6 +5,11 @@ function pct(value) {
   return Math.round((value || 0) * 100)
 }
 
+function labelize(value) {
+  if (!value) return 'unclassified'
+  return value.replaceAll('_', ' ')
+}
+
 function LeadRow({ observation, busy, onPromote, onDismiss, onLink }) {
   const [eventId, setEventId] = useState('')
   const evidence = observation.evidence
@@ -13,6 +18,7 @@ function LeadRow({ observation, busy, onPromote, onDismiss, onLink }) {
     && observation.longitude
     && observation.observed_at
     && observation.candidate_event_type
+    && (observation.location_confidence ?? 1) >= 0.75
   )
 
   return (
@@ -25,10 +31,16 @@ function LeadRow({ observation, busy, onPromote, onDismiss, onLink }) {
         <span>{relativeTime(observation.observed_at || evidence?.published_at)}</span>
         <b>CONF {pct(observation.confidence_score)}</b>
       </div>
+      {observation.exception_category && (
+        <div className="lead-card__exception">
+          <b>{labelize(observation.exception_category)}</b>
+          <span>{observation.exception_detail || observation.location_reason || 'needs review'}</span>
+        </div>
+      )}
       <div className="lead-card__title">{observation.title}</div>
       <div className="lead-card__meta">
         <span>{[observation.city, observation.state].filter(Boolean).join(', ') || observation.country}</span>
-        <span>{observation.candidate_event_type || 'context'}</span>
+        <span>{observation.candidate_event_type || 'context'} / LOC {pct(observation.location_confidence ?? 1)}</span>
       </div>
       {evidence?.source_url ? (
         <a className="lead-card__source" href={evidence.source_url} target="_blank" rel="noreferrer">
@@ -71,6 +83,7 @@ export default function ObservationReview({
   loading,
   busyId,
   error,
+  activeExceptionCategory,
   onPromote,
   onDismiss,
   onLink,
@@ -79,7 +92,7 @@ export default function ObservationReview({
     <section className="lead-review">
       <div className="rail-section-title">
         <span>Exceptions</span>
-        <b>{observations.length}</b>
+        <b>{activeExceptionCategory ? labelize(activeExceptionCategory) : observations.length}</b>
       </div>
       {error && <span className="empty-note empty-note--error">{error}</span>}
       <div className="lead-review__list">

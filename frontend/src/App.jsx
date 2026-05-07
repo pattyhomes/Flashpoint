@@ -9,6 +9,7 @@ import {
   fetchMapSignals,
   fetchObservations,
   fetchPriorities,
+  fetchSourcesStatus,
   fetchSystemStatus,
   linkObservation,
   promoteObservation,
@@ -52,6 +53,7 @@ export default function App() {
   const [hotspots, setHotspots] = useState([])
   const [priorities, setPriorities] = useState([])
   const [systemStatus, setSystemStatus] = useState(null)
+  const [sourceStatus, setSourceStatus] = useState({ sources: [], exception_counts: {} })
   const [observations, setObservations] = useState([])
   const [mapSignals, setMapSignals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -82,6 +84,8 @@ export default function App() {
   const [observationsLoading, setObservationsLoading] = useState(false)
   const [observationBusyId, setObservationBusyId] = useState(null)
   const [observationError, setObservationError] = useState(null)
+  const [activeExceptionCategory, setActiveExceptionCategory] = useState(null)
+  const activeExceptionCategoryRef = useRef(null)
 
   function applyEventsPage(page) {
     setEvents(page.items)
@@ -103,12 +107,13 @@ export default function App() {
     setEventsHasMore(page.has_more)
   }
 
-  function refreshObservations() {
+  function refreshObservations(exceptionCategory = activeExceptionCategoryRef.current) {
     setObservationsLoading(true)
-    return Promise.all([fetchObservations('lead'), fetchMapSignals()])
-      .then(([obs, signals]) => {
+    return Promise.all([fetchObservations('lead', exceptionCategory), fetchMapSignals(), fetchSourcesStatus()])
+      .then(([obs, signals, sources]) => {
         setObservations(obs)
         setMapSignals(signals)
+        setSourceStatus(sources)
         setObservationError(null)
       })
       .catch(error => {
@@ -124,16 +129,24 @@ export default function App() {
       fetchHotspots(),
       fetchPriorities(),
       fetchSystemStatus(),
+      fetchSourcesStatus(),
       fetchMapSignals(),
-    ]).then(([eventPage, hotspotRows, priorityRows, status, signals]) => {
+    ]).then(([eventPage, hotspotRows, priorityRows, status, sources, signals]) => {
       applyEventsPage(eventPage)
       setHotspots(hotspotRows)
       setPriorities(priorityRows)
       setSystemStatus(status)
+      setSourceStatus(sources)
       setMapSignals(signals)
       setLastUpdated(new Date())
       setLastPollFailed(false)
     })
+  }
+
+  function handleSetExceptionCategory(category) {
+    activeExceptionCategoryRef.current = category
+    setActiveExceptionCategory(category)
+    refreshObservations(category)
   }
 
   useEffect(() => {
@@ -142,14 +155,16 @@ export default function App() {
       fetchHotspots(),
       fetchPriorities(),
       fetchSystemStatus(),
-      fetchObservations('lead'),
+      fetchSourcesStatus(),
+      fetchObservations('lead', activeExceptionCategoryRef.current),
       fetchMapSignals(),
     ])
-      .then(([eventPage, hotspotRows, priorityRows, status, obs, signals]) => {
+      .then(([eventPage, hotspotRows, priorityRows, status, sources, obs, signals]) => {
         applyEventsPage(eventPage)
         setHotspots(hotspotRows)
         setPriorities(priorityRows)
         setSystemStatus(status)
+        setSourceStatus(sources)
         setObservations(obs)
         setMapSignals(signals)
         setLastUpdated(new Date())
@@ -161,12 +176,21 @@ export default function App() {
       .finally(() => setLoading(false))
 
     const pollId = setInterval(() => {
-      Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus(), fetchObservations('lead'), fetchMapSignals()])
-        .then(([eventPage, hotspotRows, priorityRows, status, obs, signals]) => {
+      Promise.all([
+        fetchEvents(500, 0),
+        fetchHotspots(),
+        fetchPriorities(),
+        fetchSystemStatus(),
+        fetchSourcesStatus(),
+        fetchObservations('lead', activeExceptionCategoryRef.current),
+        fetchMapSignals(),
+      ])
+        .then(([eventPage, hotspotRows, priorityRows, status, sources, obs, signals]) => {
           mergeEventsPage(eventPage)
           setHotspots(hotspotRows)
           setPriorities(priorityRows)
           setSystemStatus(status)
+          setSourceStatus(sources)
           setObservations(obs)
           setMapSignals(signals)
           setLastUpdated(new Date())
@@ -188,6 +212,7 @@ export default function App() {
   }, [])
 
   useEffect(() => { selectedItemRef.current = selectedItem }, [selectedItem])
+  useEffect(() => { activeExceptionCategoryRef.current = activeExceptionCategory }, [activeExceptionCategory])
 
   function clearSelection() {
     pendingHotspotId.current = null
@@ -484,6 +509,9 @@ export default function App() {
           observationsLoading={observationsLoading}
           observationBusyId={observationBusyId}
           observationError={observationError}
+          sourceStatus={sourceStatus}
+          activeExceptionCategory={activeExceptionCategory}
+          onSetExceptionCategory={handleSetExceptionCategory}
           onPromoteObservation={handlePromoteObservation}
           onDismissObservation={handleDismissObservation}
           onLinkObservation={handleLinkObservation}

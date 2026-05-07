@@ -20,6 +20,7 @@ Last updated: 2026-05-07
 | Evidence/observation provenance layer | done |
 | Observation APIs and map signals | done |
 | Auto-link/auto-promote safety rules | initial implementation done |
+| Stage 1.5 source health, local geocoder, local news/RSS | done |
 | Hotspot trend endpoint | done |
 | Local bundled fonts | done |
 
@@ -62,14 +63,14 @@ Do not record passwords in docs.
 
 ## Next Product Priority
 
-Before Stage 1.5 data work, keep repo docs accurate and small enough for agents.
-After that, proceed to Stage 1.5:
+Stage 1.5 is implemented as a SQLite-first data-quality pass. Next work should
+focus on operationalizing real feeds and measuring quality:
 
-1. Real scheduled weak/context source ingestion.
-2. Geocoding/location-confidence upgrade.
-3. Source health and exception categorization.
-4. Optional local embedding-based duplicate detection.
-5. Evaluation dataset for auto-link/promote thresholds.
+1. Configure live `.env` source schedules for the Pi.
+2. Expand the bundled U.S. gazetteer beyond the starter city/county dataset.
+3. Add a small evaluation fixture set for auto-link/promote thresholds.
+4. Tune exception categories and thresholds against real ingest runs.
+5. Decide when source volume justifies Stage 2 Postgres/PostGIS + workers.
 
 See `docs/data-upgrade-plan.md`.
 

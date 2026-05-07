@@ -8,6 +8,15 @@ from app.services.ingestion.base import ObservationCandidate
 from app.services.ingestion.classifier import classify
 
 
+DEFAULT_QUERY_PACK = (
+    "protest",
+    "demonstration",
+    "march downtown",
+    "police clash protest",
+    "road blocked protest",
+)
+
+
 def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -27,11 +36,18 @@ class MastodonSource:
     def fetch(self) -> list[ObservationCandidate]:
         if not settings.mastodon_access_token:
             return []
+        candidates_by_record: dict[str | None, ObservationCandidate] = {}
+        for query in _queries():
+            for candidate in self._fetch_query(query):
+                candidates_by_record.setdefault(candidate.source_record_id, candidate)
+        return list(candidates_by_record.values())
+
+    def _fetch_query(self, query: str) -> list[ObservationCandidate]:
         try:
             resp = httpx.get(
                 f"{settings.mastodon_instance_url.rstrip('/')}/api/v2/search",
                 params={
-                    "q": settings.mastodon_query,
+                    "q": query,
                     "type": "statuses",
                     "limit": settings.mastodon_max_records,
                 },
@@ -74,3 +90,9 @@ class MastodonSource:
                 )
             )
         return candidates
+
+
+def _queries() -> list[str]:
+    configured = settings.mastodon_query_pack
+    queries = [part.strip() for part in configured.split(",") if part.strip()]
+    return queries or list(DEFAULT_QUERY_PACK)

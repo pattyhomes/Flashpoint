@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     bluesky_enabled: bool = False
     bluesky_query: str = "protest OR demonstration"
+    bluesky_query_pack: str = ""
     bluesky_max_records: int = 25
     bluesky_interval_seconds: int = 1800
 
@@ -48,8 +49,17 @@ class Settings(BaseSettings):
     mastodon_instance_url: str = "https://mastodon.social"
     mastodon_access_token: str = ""
     mastodon_query: str = "protest"
+    mastodon_query_pack: str = ""
     mastodon_max_records: int = 25
     mastodon_interval_seconds: int = 1800
+
+    local_news_enabled: bool = False
+    local_news_feed_urls: str = ""
+    local_news_allowed_domains: str = ""
+    local_news_max_records: int = 25
+    local_news_fetch_articles: bool = True
+    local_news_interval_seconds: int = 1800
+    local_news_user_agent: str = "Flashpoint/0.1 local intelligence workstation"
 
     acled_enabled: bool = False
     acled_api_url: str = "https://api.acleddata.com/acled/read"
@@ -63,6 +73,7 @@ class Settings(BaseSettings):
     ollama_embeddings_enabled: bool = False
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_embedding_model: str = "all-minilm"
+    semantic_duplicate_threshold: float = 0.84
 
 
 settings = Settings()

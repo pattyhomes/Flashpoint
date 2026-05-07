@@ -25,12 +25,15 @@ def _observation_out(db: Session, observation: Observation) -> dict:
 @router.get("/", response_model=list[ObservationOut])
 def list_observations(
     status: str | None = Query("lead"),
+    exception_category: str | None = Query(None),
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db),
 ):
     query = db.query(Observation)
     if status:
         query = query.filter(Observation.status == status)
+    if exception_category:
+        query = query.filter(Observation.exception_category == exception_category)
     observations = query.order_by(Observation.created_at.desc()).limit(limit).all()
     return [_observation_out(db, observation) for observation in observations]
 

@@ -165,6 +165,10 @@ class Observation(Base):
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     location_precision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    location_confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    location_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    exception_category: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    exception_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     observed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
@@ -187,3 +191,44 @@ class IngestRun(Base):
     events_inserted:  Mapped[int]           = mapped_column(Integer, nullable=False, default=0)
     error_message:    Mapped[str|None]      = mapped_column(Text, nullable=True)
     ingest_source:    Mapped[str|None]      = mapped_column(String(32), nullable=True)   # "mock" | "gdelt" | null (legacy)
+    records_fetched:  Mapped[int]           = mapped_column(Integer, nullable=False, default=0)
+    evidence_inserted: Mapped[int]          = mapped_column(Integer, nullable=False, default=0)
+    observations_inserted: Mapped[int]      = mapped_column(Integer, nullable=False, default=0)
+    records_rejected: Mapped[int]           = mapped_column(Integer, nullable=False, default=0)
+    reject_counts_json: Mapped[str|None]    = mapped_column(Text, nullable=True)
+
+
+class LocationCache(Base):
+    __tablename__ = "location_cache"
+    __table_args__ = (
+        UniqueConstraint("query", name="uq_location_cache_query"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    query: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    county: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    country: Mapped[str] = mapped_column(String(64), nullable=False, default="US")
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    precision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow_naive)
+
+
+class LocationAlias(Base):
+    __tablename__ = "location_aliases"
+    __table_args__ = (
+        UniqueConstraint("alias", "state", name="uq_location_alias_state"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    alias: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    city: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    county: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    precision: Mapped[str] = mapped_column(String(32), nullable=False, default="city")

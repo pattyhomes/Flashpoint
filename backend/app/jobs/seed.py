@@ -18,6 +18,14 @@ from app.services.intelligence import (
 from app.services.scoring.hotspot import compute_hotspots
 from app.utils.time import utcnow_naive as utcnow
 
+OBSERVATION_SOURCE_MAP = {
+    "nws": ("nws", lambda: __import__("app.services.ingestion.nws_source", fromlist=["NwsAlertsSource"]).NwsAlertsSource()),
+    "bluesky": ("bluesky", lambda: __import__("app.services.ingestion.bluesky_source", fromlist=["BlueskySource"]).BlueskySource()),
+    "mastodon": ("mastodon", lambda: __import__("app.services.ingestion.mastodon_source", fromlist=["MastodonSource"]).MastodonSource()),
+    "local_news": ("local_news", lambda: __import__("app.services.ingestion.local_news_source", fromlist=["LocalNewsSource"]).LocalNewsSource()),
+    "acled": ("acled", lambda: __import__("app.services.ingestion.acled_source", fromlist=["AcledSource"]).AcledSource()),
+}
+
 
 def run_mock_ingestion():
     """Insert new mock events, skipping any already in the database.
@@ -88,9 +96,13 @@ def run_gdelt_ingestion():
 
         events = GdeltSource().fetch(since=since)
 
+        before_evidence_count = db.query(EvidenceItem).count()
+        before_observation_count = db.query(Observation).count()
         inserted = 0
+        rejected = 0
         for event_schema in events:
             if event_schema.source_id and is_duplicate(event_schema.source_id, db):
+                rejected += 1
                 continue
             evidence = record_evidence(
                 db,
@@ -144,6 +156,11 @@ def run_gdelt_ingestion():
         run.status = "success"
         run.finished_at = utcnow()
         run.events_inserted = inserted
+        run.records_fetched = len(events)
+        run.evidence_inserted = db.query(EvidenceItem).count() - before_evidence_count
+        run.observations_inserted = db.query(Observation).count() - before_observation_count
+        run.records_rejected = rejected
+        run.reject_counts_json = json.dumps({"duplicate": rejected}, sort_keys=True, separators=(",", ":")) if rejected else "{}"
         db.commit()
         print(f"[gdelt] Inserted {inserted} new events.")
         compute_hotspots(db)
@@ -194,14 +211,20 @@ def run_eventregistry_ingestion():
         source = EventRegistrySource()
         article_pairs = source.fetch()  # list of (EventCreate, raw_article)
 
+        before_evidence_count = db.query(EvidenceItem).count()
+        before_observation_count = db.query(Observation).count()
         inserted = 0          # new events created
         corroborated = 0      # existing events corroborated
         syndicated = 0        # copies stored but not counted
+        rejected = 0
+        reject_counts: dict[str, int] = {}
         new_events_this_run = 0
 
         for event_schema, raw_article in article_pairs:
             # --- 1. Exact source_id dedup ---
             if event_schema.source_id and is_duplicate(event_schema.source_id, db):
+                rejected += 1
+                reject_counts["duplicate"] = reject_counts.get("duplicate", 0) + 1
                 continue
 
             er_uri       = event_schema.source_id  # "er-{uri}"
@@ -402,6 +425,11 @@ def run_eventregistry_ingestion():
         run.status = "success"
         run.finished_at = utcnow()
         run.events_inserted = inserted
+        run.records_fetched = len(article_pairs)
+        run.evidence_inserted = db.query(EvidenceItem).count() - before_evidence_count
+        run.observations_inserted = db.query(Observation).count() - before_observation_count
+        run.records_rejected = rejected
+        run.reject_counts_json = json.dumps(reject_counts, sort_keys=True, separators=(",", ":"))
         db.commit()
 
         print(
@@ -428,16 +456,10 @@ def run_observation_source_ingestion(source_name: str):
     These sources never create Events directly. They only write EvidenceItem and
     Observation rows for operator review or contextual awareness.
     """
-    source_map = {
-        "nws": ("nws", lambda: __import__("app.services.ingestion.nws_source", fromlist=["NwsAlertsSource"]).NwsAlertsSource()),
-        "bluesky": ("bluesky", lambda: __import__("app.services.ingestion.bluesky_source", fromlist=["BlueskySource"]).BlueskySource()),
-        "mastodon": ("mastodon", lambda: __import__("app.services.ingestion.mastodon_source", fromlist=["MastodonSource"]).MastodonSource()),
-        "acled": ("acled", lambda: __import__("app.services.ingestion.acled_source", fromlist=["AcledSource"]).AcledSource()),
-    }
-    if source_name not in source_map:
+    if source_name not in OBSERVATION_SOURCE_MAP:
         raise ValueError(f"Unknown observation source: {source_name}")
 
-    ingest_source, factory = source_map[source_name]
+    ingest_source, factory = OBSERVATION_SOURCE_MAP[source_name]
     db = SessionLocal()
     run = IngestRun(started_at=utcnow(), status="running", ingest_source=ingest_source)
     db.add(run)
@@ -446,7 +468,10 @@ def run_observation_source_ingestion(source_name: str):
     run_id = run.id
 
     try:
-        candidates = factory().fetch()
+        source = factory()
+        candidates = source.fetch()
+        stats = getattr(source, "stats", {}) or {}
+        before_evidence_count = db.query(EvidenceItem).count()
         before_count = db.query(Observation).count()
         confirmed_changed = False
         for candidate in candidates:
@@ -478,6 +503,10 @@ def run_observation_source_ingestion(source_name: str):
                 confidence_score=candidate.confidence_score,
                 severity_score=candidate.severity_score,
                 location_precision=candidate.location_precision,
+                location_confidence=candidate.location_confidence,
+                location_reason=candidate.location_reason,
+                exception_category=candidate.exception_category,
+                exception_detail=candidate.exception_detail,
             )
             if apply_observation_automation(db, observation) is not None:
                 confirmed_changed = True
@@ -488,6 +517,11 @@ def run_observation_source_ingestion(source_name: str):
         run.status = "success"
         run.finished_at = utcnow()
         run.events_inserted = inserted
+        run.records_fetched = int(stats.get("fetched", len(candidates)))
+        run.evidence_inserted = db.query(EvidenceItem).count() - before_evidence_count
+        run.observations_inserted = inserted
+        run.records_rejected = int(stats.get("rejected", 0))
+        run.reject_counts_json = json.dumps(stats.get("reject_counts", {}), sort_keys=True, separators=(",", ":"))
         db.commit()
         if confirmed_changed:
             compute_hotspots(db)

@@ -33,16 +33,20 @@ Stage 1 evidence-first infrastructure is implemented on SQLite:
 
 ## Stage 1.5: Make The Data Real
 
+Status: implemented as of 2026-05-07.
+
 Goal: improve live data quality without moving to Postgres yet.
 
 ### 1. Scheduled Source Configuration
 
-- Turn on real schedules for selected observation sources.
+- Configure real schedules for selected observation sources through `.env`.
 - Keep GDELT/Event Registry as the confirmed/news backbone.
 - Add NWS as context observations.
 - Add Bluesky/Mastodon as weak signal feeds only.
 - Enable ACLED only when credentials/access are available.
 - Add operator-visible source freshness and failure states.
+- Add Local News/RSS ingestion with allowlisted, rate-limited, robots-aware
+  article fetching when explicitly configured.
 
 ### 2. Geocoding and Location Confidence
 
@@ -53,12 +57,13 @@ This is the highest-leverage data upgrade.
 - Track location confidence and precision separately from event confidence.
 - Store why a location was chosen.
 - Prevent weak or random geography from becoming map signals or hotspots.
+- Commit a starter U.S. city/county/state gazetteer at
+  `backend/app/data/us_locations.csv`.
 
-Likely SQLite-first tables:
+SQLite-first tables:
 
 - `location_cache`
 - `location_aliases`
-- optional `observation_location_candidates`
 
 ### 3. Source Health and Exceptions
 
@@ -69,6 +74,7 @@ Make the Sources rail a real operations console:
 - last successful fetch per source
 - records fetched vs accepted vs rejected
 - reasons leads stayed unpromoted
+- `/api/v1/sources/status`
 
 Candidate exception categories:
 
@@ -136,9 +142,9 @@ After real data quality and durable backend exist:
 
 ## Recommended Next Sprint
 
-Before Stage 1.5 implementation begins:
+After Stage 1.5 implementation:
 
 1. Confirm which live feeds should be enabled on the Pi.
-2. Define location-confidence fields and SQLite migration.
-3. Build source health telemetry and exception categories.
-4. Add a tiny eval fixture set for data-quality regression tests.
+2. Expand and verify the location gazetteer against real source output.
+3. Add a tiny eval fixture set for data-quality regression tests.
+4. Review first live ingest runs in the Sources rail and tune thresholds.

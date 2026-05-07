@@ -15,7 +15,13 @@ export const fetchHotspotDetail = (id)                      => request(`/hotspot
 export const fetchHotspotTrend  = (id, hours = 24)           => request(`/hotspots/${id}/trend?hours=${hours}`)
 export const fetchPriorities    = ()                        => request('/priorities/')
 export const fetchSystemStatus  = ()                        => request('/system/status')
-export const fetchObservations  = (status = 'lead')          => request(`/observations/?status=${status}`)
+export const fetchSourcesStatus = ()                        => request('/sources/status')
+export const fetchObservations  = (status = 'lead', exceptionCategory = null) => {
+  const params = new URLSearchParams()
+  if (status) params.set('status', status)
+  if (exceptionCategory) params.set('exception_category', exceptionCategory)
+  return request(`/observations/?${params.toString()}`)
+}
 export const fetchMapSignals    = ()                        => request('/observations/map-signals')
 export const promoteObservation = (id)                       => request(`/observations/${id}/promote`, { method: 'POST' })
 export const dismissObservation = (id)                       => request(`/observations/${id}/dismiss`, { method: 'POST' })

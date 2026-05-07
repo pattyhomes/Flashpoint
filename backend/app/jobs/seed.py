@@ -9,6 +9,7 @@ from app.services.ingestion.deduper import (
     is_syndicated_copy,
 )
 from app.services.ingestion.mock_source import MockSource
+from app.services.intelligence import record_evidence, record_observation
 from app.services.scoring.hotspot import compute_hotspots
 from app.utils.time import utcnow_naive as utcnow
 
@@ -86,7 +87,52 @@ def run_gdelt_ingestion():
         for event_schema in events:
             if event_schema.source_id and is_duplicate(event_schema.source_id, db):
                 continue
-            db.add(Event(**event_schema.model_dump()))
+            evidence = record_evidence(
+                db,
+                source_type="gdelt",
+                source_record_id=event_schema.source_id,
+                source_url=event_schema.source_url,
+                source_name="GDELT",
+                source_title=event_schema.title,
+                excerpt=event_schema.summary,
+                published_at=event_schema.occurred_at,
+                trust_tier="news",
+                raw_payload_json=event_schema.raw_payload_json,
+            )
+            new_event = Event(**event_schema.model_dump())
+            db.add(new_event)
+            db.flush()
+            db.add(EventSource(
+                event_id=new_event.id,
+                source_type="gdelt",
+                source_record_id=event_schema.source_id,
+                source_name="GDELT",
+                source_url=event_schema.source_url,
+                source_title=event_schema.title,
+                source_published_at=event_schema.occurred_at,
+                source_trust_weight=1.0,
+                location_precision=event_schema.location_precision,
+                metadata_json=event_schema.raw_payload_json,
+            ))
+            observation = record_observation(
+                db,
+                evidence=evidence,
+                status="promoted",
+                title=event_schema.title,
+                summary=event_schema.summary,
+                candidate_event_type=event_schema.event_type,
+                latitude=event_schema.latitude,
+                longitude=event_schema.longitude,
+                city=event_schema.city,
+                state=event_schema.state,
+                country=event_schema.country,
+                observed_at=event_schema.occurred_at,
+                confidence_score=event_schema.confidence_score,
+                severity_score=event_schema.severity_score,
+                location_precision=event_schema.location_precision,
+            )
+            observation.promoted_event_id = new_event.id
+            observation.linked_event_id = new_event.id
             inserted += 1
         db.commit()
 
@@ -164,6 +210,19 @@ def run_eventregistry_ingestion():
             except Exception:
                 er_event_uri = None
 
+            evidence = record_evidence(
+                db,
+                source_type="eventregistry",
+                source_record_id=er_uri,
+                source_url=article_url,
+                source_name=outlet_name,
+                source_title=article_title or event_schema.title,
+                excerpt=raw_article.get("body") or event_schema.summary,
+                published_at=published_at,
+                trust_tier="news",
+                raw_payload=raw_article,
+            )
+
             # --- 2. Cross-source match ---
             matched_event = find_matching_event(
                 title=event_schema.title,
@@ -221,11 +280,64 @@ def run_eventregistry_ingestion():
                 else:
                     syndicated += 1
 
+                observation = record_observation(
+                    db,
+                    evidence=evidence,
+                    status="linked",
+                    title=event_schema.title,
+                    summary=event_schema.summary,
+                    candidate_event_type=event_schema.event_type,
+                    latitude=event_schema.latitude,
+                    longitude=event_schema.longitude,
+                    city=event_schema.city,
+                    state=event_schema.state,
+                    country=event_schema.country,
+                    observed_at=event_schema.occurred_at,
+                    confidence_score=event_schema.confidence_score,
+                    severity_score=event_schema.severity_score,
+                    location_precision=event_schema.location_precision,
+                )
+                observation.linked_event_id = matched_event.id
+
             else:
                 # --- Discovery path ---
                 if not settings.event_registry_create_new_events:
+                    record_observation(
+                        db,
+                        evidence=evidence,
+                        status="lead",
+                        title=event_schema.title,
+                        summary=event_schema.summary,
+                        candidate_event_type=event_schema.event_type,
+                        latitude=event_schema.latitude,
+                        longitude=event_schema.longitude,
+                        city=event_schema.city,
+                        state=event_schema.state,
+                        country=event_schema.country,
+                        observed_at=event_schema.occurred_at,
+                        confidence_score=event_schema.confidence_score,
+                        severity_score=event_schema.severity_score,
+                        location_precision=event_schema.location_precision,
+                    )
                     continue
                 if new_events_this_run >= settings.event_registry_max_new_events_per_run:
+                    record_observation(
+                        db,
+                        evidence=evidence,
+                        status="lead",
+                        title=event_schema.title,
+                        summary=event_schema.summary,
+                        candidate_event_type=event_schema.event_type,
+                        latitude=event_schema.latitude,
+                        longitude=event_schema.longitude,
+                        city=event_schema.city,
+                        state=event_schema.state,
+                        country=event_schema.country,
+                        observed_at=event_schema.occurred_at,
+                        confidence_score=event_schema.confidence_score,
+                        severity_score=event_schema.severity_score,
+                        location_precision=event_schema.location_precision,
+                    )
                     continue
 
                 # Apply tiered uncorroborated confidence cap
@@ -254,6 +366,26 @@ def run_eventregistry_ingestion():
                     location_precision=event_schema.location_precision,
                     metadata_json=event_schema.raw_payload_json,
                 ))
+
+                observation = record_observation(
+                    db,
+                    evidence=evidence,
+                    status="promoted",
+                    title=event_schema.title,
+                    summary=event_schema.summary,
+                    candidate_event_type=event_schema.event_type,
+                    latitude=event_schema.latitude,
+                    longitude=event_schema.longitude,
+                    city=event_schema.city,
+                    state=event_schema.state,
+                    country=event_schema.country,
+                    observed_at=event_schema.occurred_at,
+                    confidence_score=capped_confidence,
+                    severity_score=event_schema.severity_score,
+                    location_precision=event_schema.location_precision,
+                )
+                observation.promoted_event_id = new_event.id
+                observation.linked_event_id = new_event.id
 
                 inserted += 1
                 new_events_this_run += 1

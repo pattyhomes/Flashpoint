@@ -237,12 +237,13 @@ Flashpoint/
 │   └── src/
 │       ├── App.jsx                  # Root — all state, polling, filtering
 │       ├── components/
-│       │   ├── layout/              # Shell (CSS grid), StatusBar
+│       │   ├── layout/              # V3 chrome, tabs, nav rail, telemetry
 │       │   ├── map/                 # MapPanel (MapLibre GL)
-│       │   ├── filters/             # FilterRail
 │       │   ├── priorities/          # PriorityList
 │       │   ├── detail/              # DetailPane
-│       │   └── feed/                # EventFeed
+│       │   ├── review/              # Sources/Leads exception review
+│       │   ├── workstation/         # RightRail, IncidentsDrawer
+│       │   └── feed/                # EventFeed rows reused in drawer
 │       ├── services/api.js          # Fetch wrapper for /api/v1/*
 │       └── styles/                  # CSS custom properties, dark theme
 │
@@ -492,16 +493,17 @@ Power on
 | Milestone | Status |
 |---|---|
 | FastAPI backend, SQLite models, REST API | Done |
-| React/Vite frontend (map, filters, feed, priorities, detail) | Done |
+| React/Vite V3 workstation frontend | Done |
 | GDELT + Event Registry ingestion, classifier, deduper, corroboration | Done |
+| Evidence/Observation provenance layer + observation APIs | Done |
 | Hotspot clustering, scoring, trend analysis, naming | Done |
 | PySide6 desktop shell + Qt compat layer (Milestone A) | Done |
 | Desktop runtime orchestration + Pi seam configuration | Done |
 | Pi backend service scaffolding (systemd + XDG autostart) | Done |
-| Pi frontend delivery (StaticFiles, `pi_start.sh`) | Done — Mac-validated |
-| **Pi hardware validation** — boot → READY on physical hardware | Not started |
-| Portrait/touch tuning, screen blanking control | Not started |
-| Native operator shell surfaces (Milestone C) | Not started |
+| Pi frontend delivery (StaticFiles, `pi_start.sh`) | Done |
+| **Pi hardware validation** — boot → READY on physical hardware | Done |
+| Landscape/touch workstation tuning | In progress |
+| Stage 1.5 data quality upgrade | Next |
 
 ---
 

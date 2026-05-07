@@ -191,7 +191,7 @@ for the full setup guide, boot flow, and known gaps.
 - Backend runs as a systemd user service (`flashpoint-backend.service`)
 - Shell autostarts via XDG autostart (`flashpoint.desktop` → `scripts/pi_start.sh`)
 - `scripts/pi_start.sh` sets `FLASHPOINT_MANAGED=1`, `FLASHPOINT_FULLSCREEN=1`,
-  `FLASHPOINT_DEV_QUIT=1`, `FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health`,
+  `FLASHPOINT_DEV_QUIT=0`, `FLASHPOINT_BACKEND_HEALTH_URL=http://127.0.0.1:8000/api/v1/health`,
   and `FLASHPOINT_FRONTEND_URL=http://127.0.0.1:8000`
 - Install with: `bash deploy/pi/install.sh`
 
@@ -206,16 +206,15 @@ See `deploy/pi/README.md` Prerequisites for build instructions.
 |---|---|
 | Frontend delivery for Pi | Implemented and validated |
 | Hardware validation | Boot → READY confirmed on Raspberry Pi 5 |
-| Portrait / touch | Non-map UI shields map gestures; `FLASHPOINT_PORTRAIT` geometry/rotation still future work |
-| Native surfaces | Replace overlay widget → richer native startup screen (Milestone C) |
+| Landscape / touch | V3 workstation is active; non-map UI shields map gestures |
+| Native surfaces | Future richer native startup/runtime surfaces |
 
 ---
 
 ## Out of Scope (this milestone)
 
-- Full Pi packaging or autostart
 - Settings / preferences panel
-- Production systemd service definitions
+- Replacing the React workstation with native Qt widgets
 - Rewriting any React panels into Qt widgets
 - Backend refactors
 - Electron

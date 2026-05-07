@@ -1,30 +1,148 @@
 # Architecture Reference
 
-## Backend (`backend/app/`)
+## Runtime Shape
 
-- **Entry:** `main.py` — FastAPI app, CORS middleware, router includes, startup/shutdown lifespan hooks (init DB, run migrations, start APScheduler)
-- **Models:** `models.py` — `Event`, `Hotspot`, `IngestRun` (SQLAlchemy ORM → SQLite at `data/flashpoint.db`)
-- **Schemas:** `schemas.py` — Pydantic request/response models; `EventOut`, `HotspotOut`, `HotspotDetailOut`, `SystemStatusOut`
-- **Routes:** `routes/` — one file per resource: `health`, `events`, `hotspots`, `priorities`, `system`
-- **Ingestion:** `services/ingestion/` — abstract `IngestionSource`, `MockSource` (dev), `GDELTSource` (real); normalizer + deduper
-- **Scoring:** `services/scoring/` — DBSCAN clustering, confidence scoring, trend classification, proximity-weighted hotspot naming
-- **Scheduler:** `jobs/scheduler.py` — APScheduler 30-min ingest cycle; failures logged to `IngestRun`
-- **Migration pattern:** try/except ALTER TABLE in `main.py` `_migrate()` — additive only
+Flashpoint is a transitional desktop appliance:
 
-## Frontend (`frontend/src/`)
+```text
+PySide/PyQt shell
+  -> QWebEngineView
+    -> React/Vite/MapLibre frontend
+      -> FastAPI localhost API
+        -> SQLite
+```
 
-- **State:** All data fetching and filter state lives in `App.jsx`. No external state library.
-- **Filters:** `useMemo` chains — event type, severity threshold, confidence threshold, trend state. `eventTypeCounts` memo intentionally excludes `activeTypes` from deps so type toggles don't change displayed counts.
-- **Components:** `Shell` (grid layout) → `FilterRail` (left), `MapPanel` (center, MapLibre GL), `PriorityList` + `DetailPane` (right), `EventFeed` (bottom), `StatusBar` (footer)
-- **API client:** `services/api.js` — thin `fetch` wrapper for `/api/v1/*`
-- **Styling:** CSS custom properties (`--text-muted`, `--font-mono`, `--sp-xs`, etc.) defined in `styles/index.css`; component styles in `styles/components.css`
+On the Pi, FastAPI serves the production frontend build from `frontend/dist/`.
+`scripts/pi_start.sh` launches the shell in fullscreen managed mode against
+`http://127.0.0.1:8000`.
 
-## Desktop shell (`desktop/`)
+## Backend
 
-- **Qt compat:** `desktop/app/qt_compat.py` — compatibility layer: tries PyQt6 first (Pi/system packages, supports RPi 5 16KB pages), then PySide6 (Mac/pip), then PyQt5 (legacy fallback, crashes on RPi 5). All shell code imports Qt symbols from here. `window.py` uses fully-qualified enum paths (`Qt.AlignmentFlag.*`, `Qt.WindowType.*`, `Qt.ContextMenuPolicy.*`) across all three bindings.
-- **Config:** `desktop/app/config.py` — single source of truth for all desktop runtime constants (ports, timeouts, health poll settings, Pi seam flags). Both `launcher.py` and `window.py` import from here. Pi seam env vars: `FLASHPOINT_FULLSCREEN`, `FLASHPOINT_DEV_QUIT`, `FLASHPOINT_MANAGED`, `FLASHPOINT_PORTRAIT`.
-- **Launcher:** `desktop/app/launcher.py` — orchestrates backend + frontend subprocesses, waits for readiness, then calls `desktop.app.main.main()` inline. Sets `FLASHPOINT_BACKEND_HEALTH_URL` and `FLASHPOINT_FRONTEND_URL` env vars before importing the shell. Managed ports: backend 8001, frontend 5178. `FLASHPOINT_MANAGED=1` skips subprocess management (Pi path).
-- **Entry:** `desktop/app/main.py` — launched as `-m desktop.app.main` to avoid import collision with backend's `app/` package. Uses `config.FULLSCREEN` to call `showFullScreen()` vs `show()`.
-- **Window:** `desktop/app/window.py` — `_HealthPoller` (QThread, polls health endpoint), `_OverlayWidget` (native connecting/unavailable state), `MainWindow` (state machine: CONNECTING → LOADING_WEBVIEW → READY | UNAVAILABLE). `BACKEND_HEALTH_URL` and `FRONTEND_URL` read from env vars (injected by launcher) with `config.STANDALONE_*` as fallbacks.
-- **Mac Qt install:** `pip install -r desktop/requirements.txt` (PySide6 into existing `.venv`)
-- **Pi Qt install:** `sudo apt install python3-pyqt6 python3-pyqt6.qtwebengine` + `--system-site-packages` venv
+Entry:
+
+- `backend/app/main.py` — FastAPI app, CORS, static frontend mount, router
+  includes, startup/shutdown lifecycle, additive SQLite migrations, scheduler.
+
+Data models:
+
+- `Event` — confirmed/synthesized incident layer used by map, feed, hotspots.
+- `EventSource` — provenance attached to confirmed events.
+- `EvidenceItem` — raw source snapshot/provenance.
+- `Observation` — candidate lead/context/linked/promoted intelligence.
+- `Hotspot` — computed priority cluster.
+- `IngestRun` — scheduler/source run history and freshness state.
+
+Routes:
+
+- `routes/health.py`
+- `routes/events.py`
+- `routes/hotspots.py` including `GET /api/v1/hotspots/{id}/trend`
+- `routes/observations.py` including lead workflows and map signals
+- `routes/priorities.py`
+- `routes/system.py`
+
+Ingestion:
+
+- `services/ingestion/gdelt_source.py`
+- `services/ingestion/event_registry_source.py`
+- `services/ingestion/nws_source.py`
+- `services/ingestion/bluesky_source.py`
+- `services/ingestion/mastodon_source.py`
+- `services/ingestion/acled_source.py`
+- `jobs/seed.py` contains current ingestion job orchestration.
+- `jobs/scheduler.py` registers enabled primary, supplementary, and observation
+  source jobs.
+
+Intelligence services:
+
+- `services/intelligence.py` handles evidence insertion, observation insertion,
+  map-signal eligibility, manual promote/dismiss/link, and safe auto-link/promote.
+- `services/ai_embeddings.py` optionally calls Ollama and must fail soft.
+
+Scoring:
+
+- `services/scoring/hotspot.py` computes clusters, priorities, trend state, and
+  hotspot naming.
+- Hotspots must count only active confirmed/promoted events.
+
+Migration pattern:
+
+- Current migrations are additive `ALTER TABLE` guards in `backend/app/main.py`.
+- Do not introduce destructive schema changes without an explicit migration plan.
+
+## Frontend
+
+Entry/state:
+
+- `frontend/src/App.jsx` owns data fetching, polling, selection, filters, layer
+  toggles, workspace state, and observation actions.
+- `frontend/src/services/api.js` is the thin API wrapper.
+
+Workstation layout:
+
+- `components/layout/Shell.jsx`
+- `components/layout/TopChrome.jsx`
+- `components/layout/WorkspaceTabs.jsx`
+- `components/layout/NavRail.jsx`
+- `components/layout/ControlPopover.jsx`
+- `components/layout/TelemetryBar.jsx`
+
+Map:
+
+- `components/map/MapPanel.jsx` owns MapLibre setup, dark basemap, confirmed heat,
+  signal heat, clusters, dots, hotspot rings, and map gesture behavior.
+- Overlay UI must stop map gestures from starting.
+
+Right rail and incidents:
+
+- `components/workstation/RightRail.jsx`
+- `components/workstation/IncidentsDrawer.jsx`
+- `components/priorities/PriorityList.jsx`
+- `components/detail/DetailPane.jsx`
+- `components/review/ObservationReview.jsx`
+
+Styling:
+
+- `frontend/src/styles/index.css` — design tokens and global rules.
+- `frontend/src/styles/layout.css` — workstation grid and overlay placement.
+- `frontend/src/styles/components.css` — component styling.
+- Local fonts live in `frontend/public/fonts/`.
+
+## Desktop Shell
+
+- `desktop/app/qt_compat.py` tries PyQt6 first, then PySide6, then PyQt5.
+  PyQt6 is required on Raspberry Pi 5 because PyQt5 crashes on 16KB pages.
+- `desktop/app/config.py` centralizes runtime constants and env flags.
+- `desktop/app/launcher.py` orchestrates backend/frontend subprocesses on Mac/dev.
+- `desktop/app/main.py` starts the Qt application.
+- `desktop/app/window.py` owns the native connecting/unavailable overlay and the
+  QWebEngine window.
+
+Important env flags:
+
+- `FLASHPOINT_FULLSCREEN`
+- `FLASHPOINT_DEV_QUIT`
+- `FLASHPOINT_MANAGED`
+- `FLASHPOINT_PORTRAIT`
+- `FLASHPOINT_FRONTEND_URL`
+- `FLASHPOINT_BACKEND_HEALTH_URL`
+
+## Pi Runtime
+
+Primary docs: `deploy/pi/README.md`.
+
+Runtime checks:
+
+```bash
+ssh charlie@raspberrypi.local 'systemctl --user status flashpoint-backend.service --no-pager'
+ssh charlie@raspberrypi.local 'systemctl --user status flashpoint-shell.service --no-pager'
+ssh charlie@raspberrypi.local 'curl -fsS http://127.0.0.1:8000/api/v1/health'
+```
+
+When updating the Pi from Git:
+
+```bash
+ssh charlie@raspberrypi.local 'cd /home/charlie/projects/Flashpoint && git pull --ff-only'
+ssh charlie@raspberrypi.local 'cd /home/charlie/projects/Flashpoint/frontend && npm run build'
+ssh charlie@raspberrypi.local 'systemctl --user restart flashpoint-backend.service flashpoint-shell.service'
+```

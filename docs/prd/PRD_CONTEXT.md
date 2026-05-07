@@ -1,152 +1,103 @@
-# Flashpoint — PRD Context (Distilled)
+# Flashpoint PRD Context (Distilled)
 
-Lightweight reference for daily implementation work.
-Load alongside CLAUDE.md. Consult full PDFs for planning or architectural decisions.
-
----
+Lightweight reference for implementation work. Consult the full PDFs in
+`docs/prd/` for planning or architectural ambiguity.
 
 ## What Flashpoint Is
 
-A near-real-time U.S. unrest monitoring workstation — map-first, source-backed, hotspot-aware.
-Runs as a **dedicated desktop application** on a Raspberry Pi 5 touchscreen.
-Feels like a real piece of installed equipment, not a website.
+Flashpoint is a near-real-time U.S. unrest monitoring workstation: map-first,
+source-backed, hotspot-aware, and local-first. It runs as a dedicated fullscreen
+desktop application on a Raspberry Pi 5 touchscreen.
 
-**Not:** a generic news map, a browser kiosk, a fake military prop, a surveillance product, a chat assistant.
+It should feel like installed field equipment, not a website.
 
----
+Not in scope: generic news map, browser kiosk, fake military prop, surveillance
+tool, people-level identification, accounts/collaboration, mobile app, or chat
+assistant.
 
 ## Active Project Direction
 
-**PySide6 desktop application shell** embedding the existing React/MapLibre frontend via QWebEngineView, talking to the FastAPI backend over localhost.
+The active runtime is:
 
-This is the **intentional transitional architecture** — not a permanent hack, not a final product. The transition is: wrap and control what already works, then progressively own more of the application experience natively.
-
----
-
-## Architecture (Near-Term)
-
-```
-PySide6 Desktop App (fullscreen, no browser chrome)
-├── QWebEngineView  ←  existing React/Vite UI (map, feed, priorities)
-├── native: loading screen, backend-unavailable state, retry
-└── talks to FastAPI backend via localhost:8000
-
-FastAPI Backend
-├── /api/v1/events, /hotspots, /priorities, /system/status
-├── APScheduler (30-min ingest cycle)
-└── SQLite  ←  data/flashpoint.db
+```text
+PySide/PyQt desktop shell
+  -> QWebEngineView
+    -> React/Vite/MapLibre UI
+      -> FastAPI localhost backend
+        -> SQLite
 ```
 
----
+This is intentional transitional architecture. Do not collapse the transitional
+web UI into native Qt prematurely. Preserve the real MapLibre map.
 
-## Temporary vs Permanent Strategy
+The active UI direction is the landscape V3 intelligence workstation. Historical
+portrait-only PRD language is superseded for current implementation unless the
+hardware/display direction is explicitly reopened.
 
-| Layer | Temporary (now) | Permanent (direction) |
-|---|---|---|
-| Frontend | React/Vite embedded in QWebEngineView | selected surfaces → native Qt widgets |
-| Map | MapLibre in web view | may stay web-rendered (best fit) |
-| Backend | FastAPI as separate local service | packaged as product runtime |
-| Shell | PySide6 wraps existing UI | native shell owns lifecycle, status, settings |
-| Boot | systemd backend + desktop autostart entry | desktop app supervises own runtime |
+## PRD Hierarchy
 
-**Do not collapse temporary → permanent prematurely.** Mark transitional code clearly.
+1. Primary architecture: `PRD — Flashpoint Desktop for Raspberry Pi.pdf`
+2. Product scope, UI principles, event model: `osintUnrestPRD.pdf`
+3. Hardware, schema, performance targets: `technicalPRD.pdf`
 
----
+If PRDs conflict, apply the hierarchy above and record explicit overrides in
+`docs/context.md`.
 
-## Current Repo State (2026-03-24)
+## Current Repo State (2026-05-07)
 
 | Component | Status |
 |---|---|
-| FastAPI backend | done |
-| SQLite + models | done |
-| React/Vite frontend | done |
-| MapLibre map panel | done |
-| Events / hotspots / priorities APIs | done |
-| Hotspot + trend computation | done |
-| System status + freshness endpoint | done |
-| IngestRun persistence | done |
-| Failure-aware operator status UI | done |
-| Mock data ingestion | done |
-| `desktop/` PySide6 shell (Milestone A) | **done** |
-| Boot/autostart flow (Milestone B) | **not started** |
-| Native shell surfaces (Milestone C) | **not started** |
-
----
-
-## Top Engineering Priorities
-
-1. ~~**Milestone A — Desktop Shell Bootstrap** — COMPLETE~~
-   - `desktop/` scaffold, PySide6 fullscreen app, QWebEngineView, native loading/unavailable states
-
-2. **Milestone B — Pi Runtime Integration**
-   - Pi autostart (desktop session `~/.config/labwc/autostart` or equivalent)
-   - Systemd backend service
-   - Boot → operational flow tested
-   - Portrait/touch tuning, screen blanking control
-
-3. **Milestone C — Native Operator Shell**
-   - Native startup screen
-   - Native runtime state / status ribbon
-   - Tighter connection/recovery lifecycle
-
----
+| FastAPI backend + SQLite | done |
+| React/Vite frontend + MapLibre | done |
+| PySide/PyQt desktop shell | done |
+| Pi backend service + fullscreen shell runtime | done |
+| V3 landscape workstation shell | done |
+| Touch overlay/map gesture isolation | done |
+| Evidence/Observation/Event provenance model | done |
+| Observation APIs, map signals, source rail | done |
+| Auto-link/auto-promote safety rules | initial implementation done |
+| Stage 1.5 data quality upgrade | next planned data phase |
 
 ## Product Guardrails
 
-- Touch-first: works on Pi Touch Display 2, portrait 720×1280, no hover-only interactions
-- Local-first: all data stored and processed locally, no cloud required
-- Dark, restrained, tactical aesthetic — not theatrical, not cluttered
-- Truthful operational state: freshness, stale, failed, syncing — communicated clearly
-- No browser chrome visible in production
-- No accounts, no collaboration, no mobile app, no global coverage
-- No AI HAT required (Pi 5 CPU only for V1)
-- Not a surveillance product, not people-level identification
+- Touch-first and usable on the Pi display.
+- Local-first; data stored and processed locally by default.
+- Pi remains lightweight; do not run heavy AI on it.
+- Dark, restrained, operational aesthetic.
+- Truthful runtime state: freshness, stale, failed, syncing.
+- No browser chrome in production.
+- No Chromium kiosk delivery plan.
+- Evidence and citations matter; provenance should be inspectable.
+- Confirmed scoring must not be inflated by weak social/context records.
 
----
-
-## Performance Targets (from technicalPRD)
+## Performance Targets
 
 | Metric | Target |
 |---|---|
-| Cold boot → usable dashboard | < 90 seconds |
+| Cold boot -> usable dashboard | < 90 seconds |
 | Native shell visible after session start | < 10 seconds |
 | Dashboard initial load after shell | < 8 seconds |
 | Map interaction latency | < 250 ms |
 | Detail panel open | < 500 ms |
 | 30-min ingest cycle | < 5 minutes |
 
----
-
-## Hardware Target
-
-- Board: Raspberry Pi 5
-- Display: Raspberry Pi Touch Display 2 (7-inch, 720×1280, portrait, touch)
-- OS: Raspberry Pi OS 64-bit with desktop
-- Storage: 64GB microSD
-- Power: 5V/5A USB-C
-- Cooling: active
-- AI HAT: **not required**
-
----
-
 ## Explicitly Superseded
 
-- Chromium kiosk mode as primary delivery
-- Any plan to launch `chromium-browser --kiosk` as the application
-- `deploy/flashpoint-kiosk.service` (Chromium-based)
-- "Website in kiosk mode" framing
-- V1 technical PRD's preference for Chromium kiosk (replaced by Desktop PRD architecture decision)
+- Chromium kiosk mode as primary delivery.
+- Launching `chromium-browser --kiosk` as the app.
+- `deploy/flashpoint-kiosk.service`.
+- Website-in-kiosk framing.
+- Old portrait-only implementation direction for the current V3 workstation.
 
-> The technical PRD's hardware specs, data model, performance targets, and service management requirements remain binding. Only the delivery-form sections are superseded.
+The technical PRD's hardware specs, data model concerns, performance targets,
+and service-management requirements remain useful unless superseded above.
 
----
+## Context Usage
 
-## Context Usage Guide
-
-| Use case | What to load |
+| Use case | Load |
 |---|---|
-| Day-to-day implementation | CLAUDE.md + this file |
-| Planning a new milestone | + Desktop PRD (§12–32) |
-| Product scope / feature questions | + osintUnrestPRD |
-| Schema / hardware / performance | + technicalPRD |
-| Architectural conflicts or ambiguity | all three PDFs |
+| Any non-trivial agent session | `AGENTS.md` or `CLAUDE.md`, then `docs/agent-handbook.md` |
+| Current status and priorities | `docs/context.md` |
+| Code structure | `docs/architecture.md` |
+| Data/intelligence roadmap | `docs/data-upgrade-plan.md` |
+| Product/architecture disputes | this file, then full PRD PDFs |

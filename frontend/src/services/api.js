@@ -1,7 +1,7 @@
 const BASE = '/api/v1'
 
-async function request(path) {
-  const res = await fetch(`${BASE}${path}`)
+async function request(path, options) {
+  const res = await fetch(`${BASE}${path}`, options)
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`)
   return res.json()
 }
@@ -14,3 +14,7 @@ export const fetchHotspots      = ()                        => request('/hotspot
 export const fetchHotspotDetail = (id)                      => request(`/hotspots/${id}`)
 export const fetchPriorities    = ()                        => request('/priorities/')
 export const fetchSystemStatus  = ()                        => request('/system/status')
+export const fetchObservations  = (status = 'lead')          => request(`/observations/?status=${status}`)
+export const promoteObservation = (id)                       => request(`/observations/${id}/promote`, { method: 'POST' })
+export const dismissObservation = (id)                       => request(`/observations/${id}/dismiss`, { method: 'POST' })
+export const linkObservation    = (id, eventId)              => request(`/observations/${id}/link/${eventId}`, { method: 'POST' })

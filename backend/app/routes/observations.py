@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import EvidenceItem, Observation
 from app.schemas import EvidenceItemOut, ObservationOut
+from app.services.scoring.hotspot import compute_hotspots
 from app.services.intelligence import (
     dismiss_observation,
     link_observation_to_event,
@@ -37,6 +38,7 @@ def list_observations(
 def promote(observation_id: int, db: Session = Depends(get_db)):
     try:
         promote_observation(db, observation_id)
+        compute_hotspots(db)
         observation = db.get(Observation, observation_id)
         db.commit()
         db.refresh(observation)
@@ -62,6 +64,7 @@ def dismiss(observation_id: int, db: Session = Depends(get_db)):
 def link(observation_id: int, event_id: int, db: Session = Depends(get_db)):
     try:
         link_observation_to_event(db, observation_id, event_id)
+        compute_hotspots(db)
         observation = db.get(Observation, observation_id)
         db.commit()
         db.refresh(observation)

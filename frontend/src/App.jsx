@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { fetchEvents, fetchEventDetail, fetchHotspots, fetchHotspotDetail, fetchPriorities, fetchSystemStatus } from './services/api.js'
+import {
+  dismissObservation,
+  fetchEventDetail,
+  fetchEvents,
+  fetchHotspotDetail,
+  fetchHotspots,
+  fetchObservations,
+  fetchPriorities,
+  fetchSystemStatus,
+  linkObservation,
+  promoteObservation,
+} from './services/api.js'
 
 import Shell from './components/layout/Shell.jsx'
 import StatusBar from './components/layout/StatusBar.jsx'
@@ -8,6 +19,7 @@ import FilterRail from './components/filters/FilterRail.jsx'
 import PriorityList from './components/priorities/PriorityList.jsx'
 import DetailPane from './components/detail/DetailPane.jsx'
 import EventFeed from './components/feed/EventFeed.jsx'
+import ObservationReview from './components/review/ObservationReview.jsx'
 
 export default function App() {
   const [events, setEvents]       = useState([])
@@ -20,6 +32,10 @@ export default function App() {
   const [loading, setLoading]         = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [systemStatus, setSystemStatus] = useState(null)
+  const [observations, setObservations] = useState([])
+  const [observationsLoading, setObservationsLoading] = useState(false)
+  const [observationBusyId, setObservationBusyId] = useState(null)
+  const [observationError, setObservationError] = useState(null)
   // Desktop PRD §26 — when a poll fails we keep the last-good hotspots/priorities/
   // status in state (the existing .catch never overwrites them) and surface a
   // "served from cache" indicator so the operator knows the displayed snapshot
@@ -40,17 +56,48 @@ export default function App() {
   const [minConfidence, setMinConfidence] = useState(0)
   const [activeTrends,  setActiveTrends]  = useState(new Set())
 
-  // Fetch all data on mount; poll hotspots/priorities/status every 60s thereafter
-  useEffect(() => {
-    Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
+  function applyEventsPage(evPage) {
+    setEvents(evPage.items)
+    setEventTotal(evPage.total)
+    setEventsOffset(evPage.items.length)
+    setEventsHasMore(evPage.has_more)
+  }
+
+  function refreshObservations() {
+    setObservationsLoading(true)
+    return fetchObservations('lead')
+      .then(obs => {
+        setObservations(obs)
+        setObservationError(null)
+      })
+      .catch(err => {
+        console.error('[Flashpoint] observations error:', err)
+        setObservationError('Lead queue unavailable')
+      })
+      .finally(() => setObservationsLoading(false))
+  }
+
+  function refreshConfirmedData() {
+    return Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
       .then(([evPage, hs, pr, status]) => {
-        setEvents(evPage.items)
-        setEventTotal(evPage.total)
-        setEventsOffset(evPage.items.length)
-        setEventsHasMore(evPage.has_more)
+        applyEventsPage(evPage)
         setHotspots(hs)
         setPriorities(pr)
         setSystemStatus(status)
+        setLastUpdated(new Date())
+        setLastPollFailed(false)
+      })
+  }
+
+  // Fetch all data on mount; poll hotspots/priorities/status every 60s thereafter
+  useEffect(() => {
+    Promise.all([fetchEvents(500, 0), fetchHotspots(), fetchPriorities(), fetchSystemStatus(), fetchObservations('lead')])
+      .then(([evPage, hs, pr, status, obs]) => {
+        applyEventsPage(evPage)
+        setHotspots(hs)
+        setPriorities(pr)
+        setSystemStatus(status)
+        setObservations(obs)
         setLastUpdated(new Date())
       })
       .catch(err => console.error('[Flashpoint] fetch error:', err))
@@ -59,11 +106,12 @@ export default function App() {
     // Poll hotspots, priorities, and system status every 60s.
     // Events are not polled — the user may have paginated and polling would reset that state.
     const pollId = setInterval(() => {
-      Promise.all([fetchHotspots(), fetchPriorities(), fetchSystemStatus()])
-        .then(([hs, pr, status]) => {
+      Promise.all([fetchHotspots(), fetchPriorities(), fetchSystemStatus(), fetchObservations('lead')])
+        .then(([hs, pr, status, obs]) => {
           setHotspots(hs)
           setPriorities(pr)
           setSystemStatus(status)
+          setObservations(obs)
           setLastUpdated(new Date())
           setLastPollFailed(false)
 
@@ -213,6 +261,42 @@ export default function App() {
     })
   }
 
+  function handlePromoteObservation(id) {
+    setObservationBusyId(id)
+    setObservationError(null)
+    promoteObservation(id)
+      .then(() => Promise.all([refreshObservations(), refreshConfirmedData()]))
+      .catch(err => {
+        console.error('[Flashpoint] promote observation error:', err)
+        setObservationError('Promote failed')
+      })
+      .finally(() => setObservationBusyId(null))
+  }
+
+  function handleDismissObservation(id) {
+    setObservationBusyId(id)
+    setObservationError(null)
+    dismissObservation(id)
+      .then(() => refreshObservations())
+      .catch(err => {
+        console.error('[Flashpoint] dismiss observation error:', err)
+        setObservationError('Dismiss failed')
+      })
+      .finally(() => setObservationBusyId(null))
+  }
+
+  function handleLinkObservation(id, eventId) {
+    setObservationBusyId(id)
+    setObservationError(null)
+    linkObservation(id, eventId)
+      .then(() => Promise.all([refreshObservations(), refreshConfirmedData()]))
+      .catch(err => {
+        console.error('[Flashpoint] link observation error:', err)
+        setObservationError('Link failed')
+      })
+      .finally(() => setObservationBusyId(null))
+  }
+
   const filteredEvents = useMemo(() => events.filter(e => {
     if (activeTypes.size > 0  && !activeTypes.has(e.event_type))    return false
     if (e.severity_score   < minSeverity)                            return false
@@ -302,6 +386,15 @@ export default function App() {
             priorities={filteredPriorities}
             selectedItem={selectedItem}
             onSelect={handleSelect}
+          />
+          <ObservationReview
+            observations={observations}
+            loading={observationsLoading}
+            busyId={observationBusyId}
+            error={observationError}
+            onPromote={handlePromoteObservation}
+            onDismiss={handleDismissObservation}
+            onLink={handleLinkObservation}
           />
           <DetailPane
             item={selectedItem}

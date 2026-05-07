@@ -138,6 +138,10 @@ function EventDetail({ event, detail, detailLoading }) {
 
       <div className="detail-meta">
         <div className="detail-row">
+          <span className="detail-row__label">ID</span>
+          <span className="detail-row__value">{event.id}</span>
+        </div>
+        <div className="detail-row">
           <span className="detail-row__label">Location</span>
           <span className="detail-row__value detail-row__value--primary">
             {location}

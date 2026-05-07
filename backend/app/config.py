@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     app_port: int = 8000
     app_debug: bool = True
 
-    database_url: str = "sqlite:///../data/flashpoint.db"
+    database_url: str = "sqlite:///./data/flashpoint.db"
 
     ingestion_interval_seconds: int = 1800
     mock_data_enabled: bool = True

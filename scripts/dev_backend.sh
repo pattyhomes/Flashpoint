@@ -10,4 +10,4 @@ if [ ! -f "$REPO_ROOT/.env" ]; then
 fi
 
 cd "$REPO_ROOT/backend"
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+"$REPO_ROOT/.venv/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload

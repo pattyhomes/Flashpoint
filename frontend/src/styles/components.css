@@ -405,8 +405,8 @@
 }
 
 .right-rail--detail {
-  width: var(--detail-w);
-  transform: translateX(calc(var(--right-w) - var(--detail-w)));
+  width: var(--active-detail-w);
+  transform: translateX(calc(var(--right-w) - var(--active-detail-w)));
   background: rgba(7,10,15,0.99);
   border-left: 1px solid var(--line-strong);
   box-shadow: -20px 0 60px rgba(0,0,0,0.3);
@@ -457,7 +457,6 @@
 
 .v3-priority-list__items,
 .lead-review__list,
-.detail-pane,
 .event-feed__list,
 .incidents-drawer__body,
 .signal-drawer-list {
@@ -678,6 +677,7 @@
 
 .detail-pane {
   background: rgba(7,10,15,0.99);
+  overflow: hidden;
 }
 
 .detail-pane--empty {
@@ -686,26 +686,56 @@
 }
 
 .detail-pane__header {
-  flex: 0 0 38px;
+  flex: 0 0 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
+  gap: 8px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--line);
   color: var(--t-1);
 }
 
+.detail-pane__header span {
+  min-width: 0;
+  flex: 1;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .detail-pane__header button {
-  min-height: 30px;
+  min-height: 36px;
+  min-width: 68px;
   padding: 0 10px;
   border: 1px solid var(--line);
 }
 
 .detail-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.detail-pane__footer {
+  flex: 0 0 52px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+  background: rgba(7,10,15,0.98);
+}
+
+.detail-pane__footer button {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--accent-2);
+  color: var(--accent-2);
+  background: rgba(255,181,36,0.08);
 }
 
 .detail-kicker {

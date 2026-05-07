@@ -193,7 +193,8 @@ export default function DetailPane({
   const paneRef = useRef(null)
 
   useEffect(() => {
-    if (paneRef.current) paneRef.current.scrollTop = 0
+    const body = paneRef.current?.querySelector('.detail-body')
+    if (body) body.scrollTop = 0
   }, [item])
 
   if (!item) {
@@ -207,8 +208,9 @@ export default function DetailPane({
   return (
     <div className="detail-pane" ref={paneRef}>
       <div className="detail-pane__header">
-        <button type="button" onClick={onClose}>BACK</button>
+        <button type="button" onClick={onClose} aria-label="Return to the rail">BACK</button>
         <span>{item.type === 'hotspot' ? 'HOTSPOT DETAIL' : 'EVENT DETAIL'}</span>
+        <button type="button" onClick={onClose} aria-label="Collapse the detail rail">COLLAPSE</button>
       </div>
       {item.type === 'event' ? (
         <EventDetail
@@ -226,6 +228,9 @@ export default function DetailPane({
           signals={signals}
         />
       )}
+      <div className="detail-pane__footer">
+        <button type="button" onClick={onClose}>COLLAPSE DETAIL</button>
+      </div>
     </div>
   )
 }

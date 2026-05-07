@@ -405,6 +405,7 @@ export default function App() {
 
   return (
     <Shell
+      rightExpanded={Boolean(selectedItem)}
       top={
         <>
           <TopChrome

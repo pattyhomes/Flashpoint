@@ -67,6 +67,11 @@
   pointer-events: auto;
 }
 
+.workstation__right--expanded {
+  z-index: 36;
+  overflow: visible;
+}
+
 .workstation__drawer {
   position: absolute;
   z-index: 34;

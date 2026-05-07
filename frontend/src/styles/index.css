@@ -108,6 +108,7 @@
   --nav-w: 56px;
   --right-w: 330px;
   --detail-w: 440px;
+  --active-detail-w: min(var(--detail-w), calc(100vw - var(--nav-w) - 12px));
   --drawer-w: 500px;
   --radius: 4px;
   --touch-min: 44px;

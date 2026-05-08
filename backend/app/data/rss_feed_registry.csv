@@ -1,0 +1,8 @@
+name,feed_url,allowed_domains,region,source_family,enabled,notes
+LAist,https://laist.com/rss-feed,laist.com,Los Angeles CA,news,true,Regional pilot feed
+Texas Tribune,https://feeds.texastribune.org/feeds/main/,feeds.texastribune.org;www.texastribune.org,Texas,news,true,Regional pilot feed
+WHYY Philadelphia,,whyy.org,Philadelphia PA,news,false,Watchlist; confirm current RSS URL before enabling
+ABC News U.S.,https://feeds.abcnews.com/abcnews/usheadlines,feeds.abcnews.com;abcnews.go.com,National,news,false,National fallback/watchlist
+CBS News U.S.,https://www.cbsnews.com/latest/rss/us,www.cbsnews.com,National,news,false,National fallback/watchlist
+PBS NewsHour Headlines,https://www.pbs.org/newshour/feeds/rss/headlines,www.pbs.org,National,news,false,National fallback/watchlist
+PBS NewsHour Politics,https://www.pbs.org/newshour/feeds/rss/politics,www.pbs.org,National,news,false,National fallback/watchlist

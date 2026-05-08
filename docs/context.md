@@ -20,7 +20,7 @@ Last updated: 2026-05-07
 | Evidence/observation provenance layer | done |
 | Observation APIs and map signals | done |
 | Auto-link/auto-promote safety rules | initial implementation done |
-| Stage 1.5 source health, local geocoder, local news/RSS | done |
+| Stage 1.5 source health, Census geocoder, local news/RSS | done |
 | Hotspot trend endpoint | done |
 | Local bundled fonts | done |
 
@@ -63,14 +63,19 @@ Do not record passwords in docs.
 
 ## Next Product Priority
 
-Stage 1.5 is implemented as a SQLite-first data-quality pass. Next work should
-focus on operationalizing real feeds and measuring quality:
+Stage 1.5 is implemented as a SQLite-first data-quality pass. The operational
+rollout enables NWS plus curated regional RSS first; Bluesky, Mastodon, and ACLED
+stay disabled until credentials/access and noise expectations are confirmed.
 
-1. Configure live `.env` source schedules for the Pi.
-2. Expand the bundled U.S. gazetteer beyond the starter city/county dataset.
-3. Add a small evaluation fixture set for auto-link/promote thresholds.
-4. Tune exception categories and thresholds against real ingest runs.
-5. Decide when source volume justifies Stage 2 Postgres/PostGIS + workers.
+Current operational artifacts:
+
+1. `backend/app/data/rss_feed_registry.csv` stores the regional RSS pilot.
+2. `scripts/generate_us_gazetteer.py` regenerates the Census-backed geocoder CSV.
+3. `backend/tests/fixtures/stage15_eval_cases.json` stores the eval smoke set.
+4. `scripts/run_observation_ingest.sh` runs a manual observation source ingest.
+
+Next work after rollout is threshold tuning against real ingest output and
+deciding whether source volume justifies Stage 2 Postgres/PostGIS + workers.
 
 See `docs/data-upgrade-plan.md`.
 

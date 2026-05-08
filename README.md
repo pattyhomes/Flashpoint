@@ -12,7 +12,7 @@
 [![MapLibre GL](https://img.shields.io/badge/MapLibre_GL-5.21-396CB2)](https://maplibre.org)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003b57?logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry_Pi-5-c51a4a?logo=raspberry-pi&logoColor=white)](https://raspberrypi.com)
-[![Tests](https://img.shields.io/badge/tests-145_passing-22c55e)](backend/tests/)
+[![Tests](https://img.shields.io/badge/tests-151_passing-22c55e)](backend/tests/)
 
 </div>
 
@@ -36,7 +36,7 @@ The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs e
 - **Deterministic classifier** — four-signal NLP pipeline (title keywords, body keywords, DMOZ categories, Wikipedia concepts). No LLM, no external calls. Classifies into 8 event types: `protest`, `riot`, `political_violence`, `police_clash`, `vandalism_tied_to_unrest`, `crowd_disruption`, `protest_related_road_shutdown`, `unrest`.
 - **Three-layer deduplication** — exact `source_id` match → cross-source similarity (haversine + time window + Jaccard title) → syndicated copy detection (6 rules: same outlet, wire family, title similarity, wire domain URL, timestamp proximity, ER event URI grouping).
 - **Evidence-first intelligence model** — raw sources create `EvidenceItem` and `Observation` records first. Safe independent-family corroboration can auto-link/promote; weak social volume remains signal heat until corroborated.
-- **Stage 1.5 data-quality controls** — observation location confidence/reasons, exception categories, source run stats, source health API, and a starter local U.S. city/county/state geocoder keep bad geography and noisy sources out of hotspots.
+- **Stage 1.5 data-quality controls** — observation location confidence/reasons, exception categories, source run stats, source health API, a Census-backed U.S. city/county gazetteer, and a curated RSS registry keep bad geography and noisy sources out of hotspots.
 - **Corroboration model** — each independent source family can add confidence. Syndicated wire republications (AP, Reuters, UPI, AFP, CNN, NBC) add zero. Uncorroborated ER-only events are confidence-capped by location precision tier (venue: 0.62, city: 0.58, state: 0.45).
 - **Geographic hotspot clustering** — two-pass greedy radius algorithm (75-mile metro radius, 72-hour event window). City/venue events anchor and merge in pass 1; state-level signals fall back to pass 2 state grouping. Pruned to minimum 3 events, capped at 15 hotspots.
 - **Proximity-weighted hotspot naming** — ranks candidate city names by `count / (1 + mean_distance / 50mi)` so the closest, most-frequent city wins. Falls back to county → state region → coordinates.
@@ -46,7 +46,7 @@ The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs e
 - **60-second polling with selection reconciliation** — hotspots, priorities, and system status refresh automatically. If the selected hotspot is recomputed away (ID reuse), the selection is transparently cleared.
 - **Operator status surface** — status bar shows data freshness, staleness detection, run-failed alerts, and ingest-cycle sync indicators.
 - **Touch-ready Pi appliance** — systemd user service + XDG autostart + fullscreen Qt shell with native connecting/unavailable overlay states. No browser chrome, no accounts, no cloud.
-- **145 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming, evidence workflows, source health, geocoding, map signals, and hotspot trend buckets.
+- **151 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming, evidence workflows, source health, geocoding, RSS registry, eval smoke fixtures, map signals, and hotspot trend buckets.
 
 ---
 
@@ -216,11 +216,13 @@ Flashpoint/
 │   │   ├── config.py                # pydantic-settings (all env vars)
 │   │   ├── models.py                # Event, Hotspot, EventSource, IngestRun
 │   │   ├── schemas.py               # Pydantic request/response models
-│   │   ├── routes/                  # health, events, hotspots, priorities, system
+│   │   ├── routes/                  # health, events, hotspots, priorities, sources, system
 │   │   ├── services/
 │   │   │   ├── ingestion/
 │   │   │   │   ├── gdelt_source.py          # GDELT 2.0 CSV ingestion
 │   │   │   │   ├── eventregistry_source.py  # Event Registry API
+│   │   │   │   ├── local_news_source.py     # RSS/Atom + allowlisted article fetches
+│   │   │   │   ├── rss_registry.py          # Curated regional/news feed registry
 │   │   │   │   ├── mock_source.py           # Dev/demo data
 │   │   │   │   ├── classifier.py            # Deterministic NLP classifier
 │   │   │   │   ├── deduper.py               # 3-layer deduplication
@@ -389,6 +391,17 @@ INGESTION_INTERVAL_SECONDS=1800    # 30 minutes
 # EVENT_REGISTRY_MAX_NEW_EVENTS_PER_RUN=10
 # EVENT_REGISTRY_MAX_CONFIDENCE_UNCORROBORATED=0.58
 
+# Stage 1.5 observation sources
+# NWS_ALERTS_ENABLED=false
+# NWS_ALERTS_AREA=                              # empty = national active alerts
+# LOCAL_NEWS_ENABLED=false
+# LOCAL_NEWS_FEED_URLS=                         # empty uses backend/app/data/rss_feed_registry.csv
+# LOCAL_NEWS_ALLOWED_DOMAINS=                   # required only when overriding feed URLs
+# LOCAL_NEWS_FETCH_ARTICLES=true
+#
+# First Pi rollout enables NWS + regional RSS only.
+# Bluesky, Mastodon, and ACLED remain disabled until credentials/access are confirmed.
+
 # Desktop shell (Pi deployment overrides)
 # FLASHPOINT_FULLSCREEN=1
 # FLASHPOINT_MANAGED=1    # skip subprocess management (systemd handles services)
@@ -405,7 +418,7 @@ INGESTION_INTERVAL_SECONDS=1800    # 30 minutes
 cd backend && ../.venv/bin/python -m pytest tests/ -v
 ```
 
-106 tests across 6 test files — all run in-process against in-memory SQLite, zero external API calls:
+151 tests across the backend suite — all run in-process against in-memory SQLite, zero external API calls:
 
 | File | Coverage |
 |---|---|
@@ -415,6 +428,8 @@ cd backend && ../.venv/bin/python -m pytest tests/ -v
 | `test_eventregistry_ingestion.py` | Discovery gating, confidence capping, source_count integrity, IngestRun tracking |
 | `test_hotspot_clustering.py` | Cluster radius merge/separation, centroid stability, MIN_EVENTS pruning, trend classification, momentum decay |
 | `test_hotspot_naming.py` | Proximity-weighted ranking, state/country exclusion, county fallback, coordinate fallback |
+| `test_stage15_data_upgrade.py` | Evidence/observation source stats, location gates, source status, local news ingestion |
+| `test_stage15_operational_rollout.py` | RSS registry, Census-backed geocoder, eval smoke report, manual ingest helper |
 
 ```bash
 # Lint frontend
@@ -508,7 +523,8 @@ Power on
 | Pi frontend delivery (StaticFiles, `pi_start.sh`) | Done |
 | **Pi hardware validation** — boot → READY on physical hardware | Done |
 | Landscape/touch workstation tuning | In progress |
-| Stage 1.5 data quality upgrade | Next |
+| Stage 1.5 data quality upgrade | Done |
+| Stage 1.5 live feed operational tuning | In progress |
 
 ---
 

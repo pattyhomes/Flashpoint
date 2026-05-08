@@ -10,6 +10,7 @@ import httpx
 
 from app.config import settings
 from app.services.geocoding import LocalGeocoder
+from app.services.ingestion import rss_registry
 from app.services.ingestion.base import ObservationCandidate
 from app.services.ingestion.classifier import classify
 
@@ -61,26 +62,39 @@ class LocalNewsSource:
     def fetch(self) -> list[ObservationCandidate]:
         if not settings.local_news_enabled:
             return []
-        feed_urls = _split_csv(settings.local_news_feed_urls)
-        allowed_domains = set(_split_csv(settings.local_news_allowed_domains))
+        feed_configs = self._feed_configs()
+        feed_urls = [feed_url for feed_url, _, _ in feed_configs]
+        allowed_domains = {domain for _, domains, _ in feed_configs for domain in domains}
         if not allowed_domains:
             self._reject("allowlist_required")
             return []
         candidates: list[ObservationCandidate] = []
+        feed_names = {feed_url: name for feed_url, _, name in feed_configs}
         for feed_url in feed_urls:
-            if _domain(feed_url) not in allowed_domains:
+            domains = next(domains for url, domains, _ in feed_configs if url == feed_url)
+            if _domain(feed_url) not in domains:
                 self._reject("domain_not_allowed")
                 continue
             try:
                 response = httpx.get(feed_url, headers={"User-Agent": settings.local_news_user_agent}, timeout=30)
                 response.raise_for_status()
-                candidates.extend(self._parse_feed(response.text, feed_url, allowed_domains))
+                candidates.extend(self._parse_feed(response.text, feed_url, domains, feed_names[feed_url]))
             except Exception as exc:
                 print(f"[local_news] Fetch error for {feed_url}: {exc}")
                 self._reject("fetch_error")
         return candidates[: settings.local_news_max_records]
 
-    def _parse_feed(self, text: str, feed_url: str, allowed_domains: set[str]) -> list[ObservationCandidate]:
+    def _feed_configs(self) -> list[tuple[str, set[str], str]]:
+        configured_urls = _split_csv(settings.local_news_feed_urls)
+        configured_domains = set(_split_csv(settings.local_news_allowed_domains))
+        if configured_urls:
+            return [(feed_url, configured_domains, _domain(feed_url) or "Local News") for feed_url in configured_urls]
+        return [
+            (feed.feed_url, set(feed.allowed_domains), feed.name)
+            for feed in rss_registry.load_enabled_local_news_feeds()
+        ]
+
+    def _parse_feed(self, text: str, feed_url: str, allowed_domains: set[str], feed_name: str) -> list[ObservationCandidate]:
         try:
             root = ET.fromstring(text)
         except ET.ParseError:
@@ -90,12 +104,12 @@ class LocalNewsSource:
         candidates = []
         for item in items:
             self.stats["fetched"] += 1
-            candidate = self._candidate_from_item(item, feed_url, allowed_domains)
+            candidate = self._candidate_from_item(item, feed_url, allowed_domains, feed_name)
             if candidate:
                 candidates.append(candidate)
         return candidates
 
-    def _candidate_from_item(self, item: ET.Element, feed_url: str, allowed_domains: set[str]) -> ObservationCandidate | None:
+    def _candidate_from_item(self, item: ET.Element, feed_url: str, allowed_domains: set[str], feed_name: str) -> ObservationCandidate | None:
         title = _child_text(item, ("title",)) or "Local news item"
         link = _child_text(item, ("link",))
         if link is None:
@@ -116,7 +130,7 @@ class LocalNewsSource:
             source_type="local_news",
             source_record_id=_child_text(item, ("guid", "id")) or link,
             source_url=link,
-            source_name=_domain(feed_url) or "Local News",
+            source_name=feed_name or _domain(feed_url) or "Local News",
             source_title=title[:160],
             excerpt=body[:2000] or description,
             published_at=published_at,

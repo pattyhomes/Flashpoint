@@ -153,7 +153,9 @@ After real data quality and durable backend exist:
 
 After Stage 1.5 operational rollout:
 
-1. Review first live ingest runs in the Sources rail and tune thresholds.
-2. Add or remove regional RSS feeds based on rejection counts and source quality.
-3. Decide whether Bluesky should be enabled as a weak signal source.
-4. Expand eval fixtures with real false positives from the Pi.
+1. Use the Sources rail or `scripts/report_source_quality.py` after each manual
+   ingest to inspect fetched/accepted/rejected counts and sample records.
+2. Add or remove regional RSS feeds based on source quality samples, not just
+   aggregate rejection counts.
+3. Expand eval fixtures with real false positives from the Pi source samples.
+4. Decide whether Bluesky should be enabled as a weak signal source.

@@ -73,9 +73,17 @@ Current operational artifacts:
 2. `scripts/generate_us_gazetteer.py` regenerates the Census-backed geocoder CSV.
 3. `backend/tests/fixtures/stage15_eval_cases.json` stores the eval smoke set.
 4. `scripts/run_observation_ingest.sh` runs a manual observation source ingest.
+5. `scripts/report_source_quality.py` prints latest source run counts, rejection
+   buckets, and bounded diagnostic samples.
 
-Next work after rollout is threshold tuning against real ingest output and
-deciding whether source volume justifies Stage 2 Postgres/PostGIS + workers.
+Live data tuning now persists bounded source diagnostic samples on `IngestRun`
+and exposes them through `/api/v1/sources/status`, the Sources rail, and
+`scripts/report_source_quality.py`. These samples are operations metadata only;
+they do not create events or affect hotspots.
+
+Next work after rollout is threshold tuning against real ingest output, expanding
+the eval fixture set with sampled false positives, and deciding whether source
+volume justifies Stage 2 Postgres/PostGIS + workers.
 
 See `docs/data-upgrade-plan.md`.
 

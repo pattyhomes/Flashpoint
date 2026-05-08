@@ -323,6 +323,13 @@ def test_local_news_records_diagnostic_samples_for_rejections():
     assert source.stats["sample_records"][0]["title"] == "Best weekend restaurants in Los Angeles"
 
 
+def test_source_quality_report_helper_exists_and_mentions_samples():
+    script = Path(__file__).resolve().parents[2] / "scripts" / "report_source_quality.py"
+    text = script.read_text(encoding="utf-8")
+    assert "sample_records_json" in text
+    assert "records_rejected" in text
+
+
 def test_expanded_geocoder_resolves_alias_and_county():
     from app.services.geocoding import LocalGeocoder
 

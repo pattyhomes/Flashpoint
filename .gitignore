@@ -30,6 +30,9 @@ Thumbs.db
 .idea/
 *.swp
 
+# Local worktrees
+.worktrees/
+
 # Frontend
 node_modules/
 frontend/dist/

@@ -1,5 +1,51 @@
+import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.database import Base, get_db
+from app.main import app
+
+
+def _engine():
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    return engine
+
+
+@pytest.fixture
+def db_engine():
+    engine = _engine()
+    try:
+        yield engine
+    finally:
+        Base.metadata.drop_all(bind=engine)
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client(db_engine):
+    Session = sessionmaker(bind=db_engine)
+
+    def override_db():
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override_db
+    return TestClient(app)
 
 
 def test_rss_registry_loads_enabled_regional_pilot_feeds():
@@ -153,6 +199,73 @@ def test_local_news_follows_feed_redirect_links_to_allowlisted_article_domain():
     assert candidates[0].city == "Austin"
     assert candidates[0].state == "TX"
     assert "article_fetch_error" not in source.stats["reject_counts"]
+
+
+def test_observation_source_ingestion_persists_sample_records(db_engine):
+    import app.jobs.seed as seed_module
+    from app.models import IngestRun
+
+    Session = sessionmaker(bind=db_engine)
+
+    class FakeSource:
+        stats = {
+            "fetched": 2,
+            "rejected": 2,
+            "reject_counts": {"classified_out": 2},
+            "sample_records": [
+                {
+                    "category": "classified_out",
+                    "source_name": "LAist",
+                    "title": "City council approves budget",
+                    "source_url": "https://laist.com/news/example",
+                    "reason": "No unrest classifier signal.",
+                }
+            ],
+        }
+
+        def fetch(self):
+            return []
+
+    with (
+        patch("app.jobs.seed.SessionLocal", side_effect=lambda: Session()),
+        patch.dict(seed_module.OBSERVATION_SOURCE_MAP, {"local_news": ("local_news", FakeSource)}),
+    ):
+        seed_module.run_observation_source_ingestion("local_news")
+
+    db = Session()
+    run = db.query(IngestRun).filter(IngestRun.ingest_source == "local_news").one()
+    samples = json.loads(run.sample_records_json)
+    db.close()
+
+    assert samples[0]["category"] == "classified_out"
+    assert samples[0]["title"] == "City council approves budget"
+
+
+def test_sources_status_exposes_sample_records(client, db_engine):
+    from app.models import IngestRun
+    from app.utils.time import utcnow_naive
+
+    Session = sessionmaker(bind=db_engine)
+    db = Session()
+    db.add(IngestRun(
+        started_at=utcnow_naive(),
+        finished_at=utcnow_naive(),
+        status="success",
+        ingest_source="local_news",
+        records_fetched=1,
+        records_rejected=1,
+        reject_counts_json=json.dumps({"classified_out": 1}),
+        sample_records_json=json.dumps([
+            {"category": "classified_out", "source_name": "LAist", "title": "Budget story"}
+        ]),
+    ))
+    db.commit()
+    db.close()
+
+    response = client.get("/api/v1/sources/status")
+    assert response.status_code == 200
+    source = next(row for row in response.json()["sources"] if row["source_name"] == "local_news")
+    assert source["sample_records"][0]["title"] == "Budget story"
 
 
 def test_expanded_geocoder_resolves_alias_and_county():

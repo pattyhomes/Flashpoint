@@ -202,6 +202,14 @@ class SystemStatusResponse(BaseModel):
     db_path: str
 
 
+class SourceSampleOut(BaseModel):
+    category: str
+    source_name: str | None = None
+    title: str | None = None
+    source_url: str | None = None
+    reason: str | None = None
+
+
 class SourceStatusOut(BaseModel):
     source_name: str
     status: str
@@ -213,6 +221,7 @@ class SourceStatusOut(BaseModel):
     observations_inserted: int
     records_rejected: int
     reject_counts: dict[str, int]
+    sample_records: list[SourceSampleOut] = []
     stale: bool
 
 

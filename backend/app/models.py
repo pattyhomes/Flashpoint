@@ -196,6 +196,7 @@ class IngestRun(Base):
     observations_inserted: Mapped[int]      = mapped_column(Integer, nullable=False, default=0)
     records_rejected: Mapped[int]           = mapped_column(Integer, nullable=False, default=0)
     reject_counts_json: Mapped[str|None]    = mapped_column(Text, nullable=True)
+    sample_records_json: Mapped[str|None]   = mapped_column(Text, nullable=True)
 
 
 class LocationCache(Base):

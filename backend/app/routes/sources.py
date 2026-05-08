@@ -85,6 +85,7 @@ def _source_payload(source_name: str, last_run: IngestRun | None, last_success: 
         "observations_inserted": last_run.observations_inserted if last_run else 0,
         "records_rejected": last_run.records_rejected if last_run else 0,
         "reject_counts": _json_dict(last_run.reject_counts_json if last_run else None),
+        "sample_records": _json_list(last_run.sample_records_json if last_run else None),
         "stale": stale,
     }
 
@@ -123,3 +124,15 @@ def _json_dict(value: str | None) -> dict[str, int]:
     if not isinstance(parsed, dict):
         return {}
     return {str(key): int(val) for key, val in parsed.items() if isinstance(val, int)}
+
+
+def _json_list(value: str | None) -> list[dict]:
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [item for item in parsed if isinstance(item, dict)]

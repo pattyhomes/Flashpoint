@@ -30,6 +30,7 @@ def _migrate():
             "ALTER TABLE ingest_runs ADD COLUMN observations_inserted INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE ingest_runs ADD COLUMN records_rejected INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE ingest_runs ADD COLUMN reject_counts_json TEXT",
+            "ALTER TABLE ingest_runs ADD COLUMN sample_records_json TEXT",
         ]:
             try:
                 conn.execute(text(stmt))

@@ -522,6 +522,11 @@ def run_observation_source_ingestion(source_name: str):
         run.observations_inserted = inserted
         run.records_rejected = int(stats.get("rejected", 0))
         run.reject_counts_json = json.dumps(stats.get("reject_counts", {}), sort_keys=True, separators=(",", ":"))
+        run.sample_records_json = json.dumps(
+            _bounded_sample_records(stats.get("sample_records", [])),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         db.commit()
         if confirmed_changed:
             compute_hotspots(db)
@@ -536,6 +541,23 @@ def run_observation_source_ingestion(source_name: str):
         print(f"[{ingest_source}] Error: {e}")
     finally:
         db.close()
+
+
+def _bounded_sample_records(value, limit: int = 8) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    samples = []
+    for item in value[:limit]:
+        if not isinstance(item, dict):
+            continue
+        samples.append({
+            "category": str(item.get("category") or "sample")[:64],
+            "source_name": str(item.get("source_name") or "")[:128] or None,
+            "title": str(item.get("title") or "")[:180] or None,
+            "source_url": str(item.get("source_url") or "")[:512] or None,
+            "reason": str(item.get("reason") or "")[:220] or None,
+        })
+    return samples
 
 
 def reset_and_seed():

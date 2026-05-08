@@ -12,7 +12,7 @@
 [![MapLibre GL](https://img.shields.io/badge/MapLibre_GL-5.21-396CB2)](https://maplibre.org)
 [![SQLite](https://img.shields.io/badge/SQLite-3-003b57?logo=sqlite&logoColor=white)](https://sqlite.org)
 [![Raspberry Pi](https://img.shields.io/badge/Raspberry_Pi-5-c51a4a?logo=raspberry-pi&logoColor=white)](https://raspberrypi.com)
-[![Tests](https://img.shields.io/badge/tests-156_passing-22c55e)](backend/tests/)
+[![Tests](https://img.shields.io/badge/tests-160_passing-22c55e)](backend/tests/)
 
 </div>
 
@@ -46,7 +46,7 @@ The pipeline pulls from public OSINT sources (GDELT 2.0, Event Registry), runs e
 - **60-second polling with selection reconciliation** — hotspots, priorities, and system status refresh automatically. If the selected hotspot is recomputed away (ID reuse), the selection is transparently cleared.
 - **Operator status surface** — status bar shows data freshness, staleness detection, run-failed alerts, and ingest-cycle sync indicators.
 - **Touch-ready Pi appliance** — systemd user service + XDG autostart + fullscreen Qt shell with native connecting/unavailable overlay states. No browser chrome, no accounts, no cloud.
-- **156 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming, evidence workflows, source health, geocoding, RSS registry, eval smoke fixtures, map signals, and hotspot trend buckets.
+- **160 backend tests** — classifier, deduplication, corroboration, confidence model, clustering, hotspot naming, evidence workflows, source health, geocoding, RSS registry, eval smoke fixtures, map signals, and hotspot trend buckets.
 
 ---
 
@@ -140,7 +140,7 @@ Pi boots → auto-login (pi user)
 | **Desktop (Pi)** | PyQt6 (system packages) | `python3-pyqt6.qtwebengine` via apt — PyQt5 crashes on RPi 5 16KB pages (commit 33e08b9) |
 | **Qt compat layer** | `desktop/app/qt_compat.py` | Tries PyQt6, then PySide6, then PyQt5 (legacy fallback) |
 | **Pi OS** | Raspberry Pi OS 64-bit Bookworm | systemd user service + XDG autostart |
-| **Testing** | pytest | 156 tests, zero external calls |
+| **Testing** | pytest | 160 tests, zero external calls |
 
 ---
 
@@ -418,7 +418,7 @@ INGESTION_INTERVAL_SECONDS=1800    # 30 minutes
 cd backend && ../.venv/bin/python -m pytest tests/ -v
 ```
 
-156 tests across the backend suite — all run in-process against in-memory SQLite, zero external API calls:
+160 tests across the backend suite — all run in-process against in-memory SQLite, zero external API calls:
 
 | File | Coverage |
 |---|---|
@@ -443,6 +443,8 @@ Source quality report:
 ```
 
 The report prints latest source run counts, rejection buckets, and bounded sample records for tuning RSS/news feeds without opening the Pi UI.
+
+The Sources rail also includes recent run history and Run Now controls for bounded observation sources (`nws`, `local_news`, and future configured weak-signal sources).
 
 ---
 

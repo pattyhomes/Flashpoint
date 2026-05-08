@@ -81,6 +81,10 @@ and exposes them through `/api/v1/sources/status`, the Sources rail, and
 `scripts/report_source_quality.py`. These samples are operations metadata only;
 they do not create events or affect hotspots.
 
+The Sources rail now doubles as the Stage 1.5 source operations console: it
+shows run history, quality samples, and Run Now controls for bounded observation
+sources. Confirmed-source and hotspot rules remain unchanged.
+
 Next work after rollout is threshold tuning against real ingest output, expanding
 the eval fixture set with sampled false positives, and deciding whether source
 volume justifies Stage 2 Postgres/PostGIS + workers.

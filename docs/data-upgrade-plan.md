@@ -153,8 +153,8 @@ After real data quality and durable backend exist:
 
 After Stage 1.5 operational rollout:
 
-1. Use the Sources rail or `scripts/report_source_quality.py` after each manual
-   ingest to inspect fetched/accepted/rejected counts and sample records.
+1. Run `nws` and `local_news` from the Sources rail after deploy, then inspect
+   recent run history and source samples.
 2. Add or remove regional RSS feeds based on source quality samples, not just
    aggregate rejection counts.
 3. Expand eval fixtures with real false positives from the Pi source samples.

@@ -76,7 +76,12 @@ class LocalNewsSource:
                 self._reject("domain_not_allowed")
                 continue
             try:
-                response = httpx.get(feed_url, headers={"User-Agent": settings.local_news_user_agent}, timeout=30)
+                response = httpx.get(
+                    feed_url,
+                    headers={"User-Agent": settings.local_news_user_agent},
+                    timeout=30,
+                    follow_redirects=True,
+                )
                 response.raise_for_status()
                 candidates.extend(self._parse_feed(response.text, feed_url, domains, feed_names[feed_url]))
             except Exception as exc:
@@ -162,10 +167,20 @@ class LocalNewsSource:
             return ""
         try:
             time.sleep(0.05)
-            response = httpx.get(url, headers={"User-Agent": settings.local_news_user_agent}, timeout=30)
+            response = httpx.get(
+                url,
+                headers={"User-Agent": settings.local_news_user_agent},
+                timeout=30,
+                follow_redirects=True,
+            )
             response.raise_for_status()
         except Exception:
             self._reject("article_fetch_error")
+            return ""
+        raw_final_url = getattr(response, "url", None)
+        final_url = str(raw_final_url) if isinstance(raw_final_url, (str, httpx.URL)) else url
+        if _domain(final_url) not in allowed_domains:
+            self._reject("article_domain_not_allowed")
             return ""
         text = _strip_html(response.text)
         return text[:4000]

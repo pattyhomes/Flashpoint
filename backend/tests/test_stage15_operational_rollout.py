@@ -12,6 +12,7 @@ def test_rss_registry_loads_enabled_regional_pilot_feeds():
     assert "ABC News U.S." not in names
     assert all(feed.feed_url for feed in feeds)
     assert all(feed.allowed_domains for feed in feeds)
+    assert any(feed.name == "LAist" and feed.feed_url == "https://laist.com/news.rss" for feed in feeds)
     assert any("laist.com" in feed.allowed_domains for feed in feeds)
     assert any("feeds.texastribune.org" in feed.allowed_domains for feed in feeds)
 
@@ -77,7 +78,7 @@ def test_local_news_uses_enabled_registry_when_env_feed_list_empty():
                 (),
                 {
                     "name": "LAist",
-                    "feed_url": "https://laist.com/rss-feed",
+                    "feed_url": "https://laist.com/news.rss",
                     "allowed_domains": ("laist.com",),
                 },
             )()
@@ -88,6 +89,70 @@ def test_local_news_uses_enabled_registry_when_env_feed_list_empty():
     assert candidates[0].source_name == "LAist"
     assert candidates[0].city == "Los Angeles"
     assert candidates[0].state == "CA"
+
+
+def test_local_news_follows_feed_redirect_links_to_allowlisted_article_domain():
+    from app.services.ingestion.local_news_source import LocalNewsSource
+
+    feed = """<?xml version="1.0"?>
+    <rss version="2.0"><channel>
+      <item>
+        <guid>tt-1</guid>
+        <title>Protest update after downtown gathering</title>
+        <link>https://feeds.texastribune.org/link/16799/tt-1/austin-road-closure</link>
+        <description>Brief update from the newsroom.</description>
+        <pubDate>Thu, 07 May 2026 12:00:00 GMT</pubDate>
+      </item>
+    </channel></rss>
+    """
+    feed_response = MagicMock(text=feed)
+    feed_response.raise_for_status.return_value = None
+    robots_response = MagicMock(text="User-agent: *\nAllow: /\n", status_code=200)
+    robots_response.raise_for_status.return_value = None
+    article_response = MagicMock(
+        text="<article>Protesters set up a road blockade in downtown Austin, TX.</article>",
+        url="https://www.texastribune.org/2026/05/07/austin-road-closure/",
+    )
+    article_response.raise_for_status.return_value = None
+
+    def fake_get(url, **kwargs):
+        if url == "https://feeds.texastribune.org/feeds/main/":
+            return feed_response
+        if url == "https://feeds.texastribune.org/robots.txt":
+            return robots_response
+        if url == "https://feeds.texastribune.org/link/16799/tt-1/austin-road-closure":
+            if not kwargs.get("follow_redirects"):
+                raise RuntimeError("redirect was not followed")
+            return article_response
+        raise AssertionError(f"unexpected URL: {url}")
+
+    with (
+        patch("app.config.settings.local_news_enabled", True),
+        patch("app.config.settings.local_news_feed_urls", ""),
+        patch("app.config.settings.local_news_allowed_domains", ""),
+        patch("app.config.settings.local_news_max_records", 5),
+        patch("app.services.ingestion.rss_registry.load_enabled_local_news_feeds") as load_feeds,
+        patch("app.services.ingestion.local_news_source.httpx.get", side_effect=fake_get),
+    ):
+        load_feeds.return_value = [
+            type(
+                "Feed",
+                (),
+                {
+                    "name": "Texas Tribune",
+                    "feed_url": "https://feeds.texastribune.org/feeds/main/",
+                    "allowed_domains": ("feeds.texastribune.org", "www.texastribune.org"),
+                },
+            )()
+        ]
+        source = LocalNewsSource()
+        candidates = source.fetch()
+
+    assert len(candidates) == 1
+    assert candidates[0].candidate_event_type == "protest"
+    assert candidates[0].city == "Austin"
+    assert candidates[0].state == "TX"
+    assert "article_fetch_error" not in source.stats["reject_counts"]
 
 
 def test_expanded_geocoder_resolves_alias_and_county():

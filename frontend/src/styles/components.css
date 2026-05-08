@@ -674,6 +674,24 @@
   margin-top: 6px;
 }
 
+.source-row__run {
+  width: fit-content;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(109,179,255,0.32);
+  background: rgba(109,179,255,0.10);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  touch-action: manipulation;
+}
+
+.source-row__run:disabled {
+  opacity: 0.55;
+}
+
 .source-sample {
   display: grid;
   gap: 2px;
@@ -702,6 +720,76 @@
 
 .source-row--stale {
   background: rgba(255,181,36,0.06);
+}
+
+.source-runs {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.source-runs__list {
+  max-height: 150px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.source-run {
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.source-run > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.source-run b,
+.source-run span,
+.source-run dt,
+.source-run dd {
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.source-run b {
+  overflow: hidden;
+  color: var(--t-0);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.source-run span,
+.source-run dt {
+  color: var(--t-2);
+  text-transform: uppercase;
+}
+
+.source-run dl {
+  display: grid;
+  grid-template-columns: repeat(3, auto auto);
+  gap: 3px 5px;
+  margin: 0;
+}
+
+.source-run dd {
+  margin: 0;
+  color: var(--t-0);
+}
+
+.source-run dt {
+  margin: 0;
+}
+
+.source-run--failed {
+  background: rgba(231,89,73,0.08);
 }
 
 .exception-filters {

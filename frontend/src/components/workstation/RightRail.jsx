@@ -1,6 +1,7 @@
 import DetailPane from '../detail/DetailPane.jsx'
 import PriorityList from '../priorities/PriorityList.jsx'
 import ObservationReview from '../review/ObservationReview.jsx'
+import { relativeTime } from '../../utils/time.js'
 
 function labelize(value) {
   if (!value) return 'Uncategorized'
@@ -11,7 +12,7 @@ function formatCount(value) {
   return Number.isFinite(Number(value)) ? Number(value).toLocaleString() : '0'
 }
 
-function SourceHealth({ sourceStatus, systemStatus }) {
+function SourceHealth({ sourceStatus, systemStatus, sourceRunBusy, onRunSource }) {
   const sources = sourceStatus?.sources || []
   const totalSources = sources.length || systemStatus?.source_count || 0
   const unhealthy = sources.filter(source => source.status !== 'success').length || systemStatus?.unhealthy_source_count || 0
@@ -61,6 +62,16 @@ function SourceHealth({ sourceStatus, systemStatus }) {
                   <span>{acceptanceRate}% accepted</span>
                   {topReject && <span>{labelize(topReject[0])}: {formatCount(topReject[1])}</span>}
                 </div>
+                {source.runnable && (
+                  <button
+                    type="button"
+                    className="source-row__run"
+                    disabled={sourceRunBusy === source.source_name}
+                    onClick={() => onRunSource(source.source_name)}
+                  >
+                    {sourceRunBusy === source.source_name ? 'RUNNING' : 'RUN NOW'}
+                  </button>
+                )}
                 {samples.length > 0 && (
                   <div className="source-row__samples">
                     {samples.slice(0, 3).map((sample, index) => (
@@ -80,6 +91,34 @@ function SourceHealth({ sourceStatus, systemStatus }) {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+function SourceRuns({ runs, loading }) {
+  return (
+    <div className="source-runs">
+      <div className="rail-section-title">
+        <span>Recent Runs</span>
+        <b>{loading ? 'sync' : formatCount(runs.length)}</b>
+      </div>
+      <div className="source-runs__list">
+        {runs.length === 0 ? (
+          <span className="empty-note">No run history yet.</span>
+        ) : runs.slice(0, 8).map(run => (
+          <div className={`source-run source-run--${run.status}`} key={run.id}>
+            <div>
+              <b>{labelize(run.source_name)}</b>
+              <span>{relativeTime(run.finished_at || run.started_at)}</span>
+            </div>
+            <dl>
+              <dt>F</dt><dd>{formatCount(run.records_fetched)}</dd>
+              <dt>A</dt><dd>{formatCount(run.observations_inserted)}</dd>
+              <dt>R</dt><dd>{formatCount(run.records_rejected)}</dd>
+            </dl>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -134,6 +173,11 @@ export default function RightRail({
   onLinkObservation,
   systemStatus,
   sourceStatus,
+  sourceRuns,
+  sourceRunsLoading,
+  sourceRunBusy,
+  sourceRunError,
+  onRunSource,
   activeExceptionCategory,
   onSetExceptionCategory,
 }) {
@@ -165,7 +209,14 @@ export default function RightRail({
         <DetailPane {...detailProps} item={selectedItem} />
       ) : activeTab === 'sources' ? (
         <div className="sources-rail">
-          <SourceHealth sourceStatus={sourceStatus} systemStatus={systemStatus} />
+          {sourceRunError && <span className="empty-note empty-note--error">{sourceRunError}</span>}
+          <SourceHealth
+            sourceStatus={sourceStatus}
+            systemStatus={systemStatus}
+            sourceRunBusy={sourceRunBusy}
+            onRunSource={onRunSource}
+          />
+          <SourceRuns runs={sourceRuns || []} loading={sourceRunsLoading} />
           <ExceptionFilters
             counts={sourceStatus?.exception_counts || systemStatus?.exception_counts}
             activeCategory={activeExceptionCategory}

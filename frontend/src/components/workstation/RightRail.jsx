@@ -39,22 +39,47 @@ function SourceHealth({ sourceStatus, systemStatus }) {
       <div className="source-list">
         {sources.length === 0 ? (
           <span className="empty-note">No source runs yet.</span>
-        ) : sources.map(source => (
-          <div
-            className={`source-row source-row--${source.status}${source.stale ? ' source-row--stale' : ''}`}
-            key={source.source_name}
-          >
-            <div>
-              <b>{labelize(source.source_name)}</b>
-              <span>{source.last_error || (source.stale ? 'stale feed' : source.last_run_at ? 'fresh' : 'not scheduled')}</span>
+        ) : sources.map(source => {
+          const accepted = source.observations_inserted || 0
+          const fetched = source.records_fetched || 0
+          const acceptanceRate = fetched > 0 ? Math.round((accepted / fetched) * 100) : 0
+          const rejectEntries = Object.entries(source.reject_counts || {}).sort((a, b) => b[1] - a[1])
+          const topReject = rejectEntries[0]
+          const samples = source.sample_records || []
+
+          return (
+            <div
+              className={`source-row source-row--${source.status}${source.stale ? ' source-row--stale' : ''}`}
+              key={source.source_name}
+            >
+              <div className="source-row__main">
+                <div>
+                  <b>{labelize(source.source_name)}</b>
+                  <span>{source.last_error || (source.stale ? 'stale feed' : source.last_run_at ? 'fresh' : 'not scheduled')}</span>
+                </div>
+                <div className="source-row__quality">
+                  <span>{acceptanceRate}% accepted</span>
+                  {topReject && <span>{labelize(topReject[0])}: {formatCount(topReject[1])}</span>}
+                </div>
+                {samples.length > 0 && (
+                  <div className="source-row__samples">
+                    {samples.slice(0, 3).map((sample, index) => (
+                      <div className="source-sample" key={`${source.source_name}-${index}`}>
+                        <b>{labelize(sample.category)}</b>
+                        <span>{sample.title || sample.reason || 'Sample record'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <dl>
+                <dt>F</dt><dd>{formatCount(source.records_fetched)}</dd>
+                <dt>A</dt><dd>{formatCount(source.observations_inserted)}</dd>
+                <dt>R</dt><dd>{formatCount(source.records_rejected)}</dd>
+              </dl>
             </div>
-            <dl>
-              <dt>F</dt><dd>{formatCount(source.records_fetched)}</dd>
-              <dt>A</dt><dd>{formatCount(source.observations_inserted)}</dd>
-              <dt>R</dt><dd>{formatCount(source.records_rejected)}</dd>
-            </dl>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

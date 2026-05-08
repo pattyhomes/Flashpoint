@@ -59,7 +59,7 @@
 - Modify: `docs/context.md`
 
 - [x] Document NWS/local RSS config and deferred social/ACLED sources.
-- [ ] Run full backend/frontend verification.
-- [ ] Push branch, merge to `main`, push `main`.
-- [ ] Fast-forward Pi to `main`.
-- [ ] Back up Pi `.env`, apply NWS + regional RSS config, restart backend, run manual `nws` and `local_news` ingest, verify `/api/v1/sources/status`.
+- [x] Run full backend/frontend verification.
+- [x] Push branch, merge to `main`, push `main`.
+- [x] Fast-forward Pi to `main`.
+- [x] Back up Pi `.env`, apply NWS + regional RSS config, restart backend, run manual `nws` and `local_news` ingest, verify `/api/v1/sources/status`.

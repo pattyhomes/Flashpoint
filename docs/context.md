@@ -36,9 +36,9 @@ requirements.
 
 ## Current Branch/Deployment
 
-Recent work is on `codex/stage1-intelligence-upgrade`.
+Recent work is merged to `main`.
 
-The Mac, GitHub branch, and Pi were aligned on this branch during the V3 pass.
+The Mac, GitHub `main`, and Pi are aligned on the Stage 1.5 operational rollout.
 If a future session starts elsewhere, check:
 
 ```bash

@@ -222,10 +222,35 @@ class SourceStatusOut(BaseModel):
     records_rejected: int
     reject_counts: dict[str, int]
     sample_records: list[SourceSampleOut] = []
+    runnable: bool = False
     stale: bool
 
 
 class SourcesStatusResponse(BaseModel):
     sources: list[SourceStatusOut]
     exception_counts: dict[str, int]
+    generated_at: datetime
+
+
+class SourceRunOut(BaseModel):
+    id: int
+    source_name: str | None
+    status: str
+    started_at: datetime
+    finished_at: datetime | None
+    events_inserted: int
+    records_fetched: int
+    evidence_inserted: int
+    observations_inserted: int
+    records_rejected: int
+    reject_counts: dict[str, int] = {}
+    sample_records: list[SourceSampleOut] = []
+    error_message: str | None = None
+
+
+class SourceRunHistoryResponse(BaseModel):
+    runs: list[SourceRunOut]
+    total: int
+    limit: int
+    source_name: str | None = None
     generated_at: datetime

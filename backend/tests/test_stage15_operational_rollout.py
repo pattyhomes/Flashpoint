@@ -330,6 +330,63 @@ def test_source_quality_report_helper_exists_and_mentions_samples():
     assert "records_rejected" in text
 
 
+def test_sources_status_marks_observation_sources_runnable(client, db_engine):
+    from app.models import IngestRun
+    from app.utils.time import utcnow_naive
+
+    Session = sessionmaker(bind=db_engine)
+    db = Session()
+    db.add(IngestRun(
+        started_at=utcnow_naive(),
+        finished_at=utcnow_naive(),
+        status="success",
+        ingest_source="local_news",
+    ))
+    db.add(IngestRun(
+        started_at=utcnow_naive(),
+        finished_at=utcnow_naive(),
+        status="success",
+        ingest_source="gdelt",
+    ))
+    db.commit()
+    db.close()
+
+    response = client.get("/api/v1/sources/status")
+    assert response.status_code == 200
+    rows = {row["source_name"]: row for row in response.json()["sources"]}
+    assert rows["local_news"]["runnable"] is True
+    assert rows["gdelt"]["runnable"] is False
+
+
+def test_sources_runs_endpoint_returns_recent_runs(client, db_engine):
+    from app.models import IngestRun
+    from app.utils.time import utcnow_naive
+
+    Session = sessionmaker(bind=db_engine)
+    db = Session()
+    for index, source_name in enumerate(["local_news", "nws", "local_news"]):
+        db.add(IngestRun(
+            started_at=utcnow_naive(),
+            finished_at=utcnow_naive(),
+            status="success",
+            ingest_source=source_name,
+            records_fetched=index + 1,
+            observations_inserted=index,
+            records_rejected=1,
+            reject_counts_json=json.dumps({"classified_out": 1}),
+            sample_records_json=json.dumps([{"category": "classified_out", "title": f"sample {index}"}]),
+        ))
+    db.commit()
+    db.close()
+
+    response = client.get("/api/v1/sources/runs?source_name=local_news&limit=5")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 2
+    assert all(row["source_name"] == "local_news" for row in payload["runs"])
+    assert payload["runs"][0]["sample_records"][0]["category"] == "classified_out"
+
+
 def test_expanded_geocoder_resolves_alias_and_county():
     from app.services.geocoding import LocalGeocoder
 

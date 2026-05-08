@@ -1,17 +1,19 @@
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app.models import IngestRun, Observation
-from app.schemas import SourcesStatusResponse
+from app.schemas import SourceRunHistoryResponse, SourcesStatusResponse
 from app.utils.time import to_utc, utcnow, utcnow_naive
 
 router = APIRouter(prefix="/sources", tags=["sources"])
+
+RUNNABLE_OBSERVATION_SOURCES = {"nws", "bluesky", "mastodon", "local_news", "acled"}
 
 
 @router.get("/status", response_model=SourcesStatusResponse)
@@ -86,7 +88,46 @@ def _source_payload(source_name: str, last_run: IngestRun | None, last_success: 
         "records_rejected": last_run.records_rejected if last_run else 0,
         "reject_counts": _json_dict(last_run.reject_counts_json if last_run else None),
         "sample_records": _json_list(last_run.sample_records_json if last_run else None),
+        "runnable": source_name in RUNNABLE_OBSERVATION_SOURCES,
         "stale": stale,
+    }
+
+
+@router.get("/runs", response_model=SourceRunHistoryResponse)
+def source_runs(
+    source_name: str | None = None,
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    query = db.query(IngestRun).filter(IngestRun.ingest_source.isnot(None))
+    if source_name:
+        query = query.filter(IngestRun.ingest_source == source_name)
+    total = query.count()
+    rows = query.order_by(IngestRun.started_at.desc()).limit(limit).all()
+    return {
+        "runs": [_run_payload(row) for row in rows],
+        "total": total,
+        "limit": limit,
+        "source_name": source_name,
+        "generated_at": utcnow_naive(),
+    }
+
+
+def _run_payload(run: IngestRun) -> dict:
+    return {
+        "id": run.id,
+        "source_name": run.ingest_source,
+        "status": run.status,
+        "started_at": run.started_at,
+        "finished_at": run.finished_at,
+        "events_inserted": run.events_inserted,
+        "records_fetched": run.records_fetched,
+        "evidence_inserted": run.evidence_inserted,
+        "observations_inserted": run.observations_inserted,
+        "records_rejected": run.records_rejected,
+        "reject_counts": _json_dict(run.reject_counts_json),
+        "sample_records": _json_list(run.sample_records_json),
+        "error_message": run.error_message,
     }
 
 

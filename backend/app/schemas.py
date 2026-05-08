@@ -254,3 +254,9 @@ class SourceRunHistoryResponse(BaseModel):
     limit: int
     source_name: str | None = None
     generated_at: datetime
+
+
+class SourceRunRequestResponse(BaseModel):
+    source_name: str
+    status: str
+    message: str

@@ -1,14 +1,15 @@
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.jobs.seed import run_observation_source_ingestion
 from app.models import IngestRun, Observation
-from app.schemas import SourceRunHistoryResponse, SourcesStatusResponse
+from app.schemas import SourceRunHistoryResponse, SourceRunRequestResponse, SourcesStatusResponse
 from app.utils.time import to_utc, utcnow, utcnow_naive
 
 router = APIRouter(prefix="/sources", tags=["sources"])
@@ -110,6 +111,21 @@ def source_runs(
         "limit": limit,
         "source_name": source_name,
         "generated_at": utcnow_naive(),
+    }
+
+
+@router.post("/{source_name}/run", response_model=SourceRunRequestResponse)
+def run_source_now(source_name: str):
+    if source_name not in RUNNABLE_OBSERVATION_SOURCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Source {source_name!r} is not runnable from the operator console",
+        )
+    run_observation_source_ingestion(source_name)
+    return {
+        "source_name": source_name,
+        "status": "queued",
+        "message": f"{source_name} ingest completed",
     }
 
 

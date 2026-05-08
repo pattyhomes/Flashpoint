@@ -387,6 +387,22 @@ def test_sources_runs_endpoint_returns_recent_runs(client, db_engine):
     assert payload["runs"][0]["sample_records"][0]["category"] == "classified_out"
 
 
+def test_sources_run_now_queues_observation_ingest(client):
+    with patch("app.routes.sources.run_observation_source_ingestion") as run_ingest:
+        response = client.post("/api/v1/sources/local_news/run")
+
+    assert response.status_code == 200
+    assert response.json()["source_name"] == "local_news"
+    assert response.json()["status"] == "queued"
+    run_ingest.assert_called_once_with("local_news")
+
+
+def test_sources_run_now_rejects_non_observation_source(client):
+    response = client.post("/api/v1/sources/gdelt/run")
+    assert response.status_code == 400
+    assert "not runnable" in response.json()["detail"]
+
+
 def test_expanded_geocoder_resolves_alias_and_county():
     from app.services.geocoding import LocalGeocoder
 

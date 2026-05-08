@@ -16,6 +16,12 @@ export const fetchHotspotTrend  = (id, hours = 24)           => request(`/hotspo
 export const fetchPriorities    = ()                        => request('/priorities/')
 export const fetchSystemStatus  = ()                        => request('/system/status')
 export const fetchSourcesStatus = ()                        => request('/sources/status')
+export const fetchSourceRuns    = (sourceName = null, limit = 20) => {
+  const params = new URLSearchParams()
+  if (sourceName) params.set('source_name', sourceName)
+  params.set('limit', String(limit))
+  return request(`/sources/runs?${params.toString()}`)
+}
 export const fetchObservations  = (status = 'lead', exceptionCategory = null) => {
   const params = new URLSearchParams()
   if (status) params.set('status', status)
@@ -23,6 +29,7 @@ export const fetchObservations  = (status = 'lead', exceptionCategory = null) =>
   return request(`/observations/?${params.toString()}`)
 }
 export const fetchMapSignals    = ()                        => request('/observations/map-signals')
+export const runSourceNow       = (sourceName)               => request(`/sources/${sourceName}/run`, { method: 'POST' })
 export const promoteObservation = (id)                       => request(`/observations/${id}/promote`, { method: 'POST' })
 export const dismissObservation = (id)                       => request(`/observations/${id}/dismiss`, { method: 'POST' })
 export const linkObservation    = (id, eventId)              => request(`/observations/${id}/link/${eventId}`, { method: 'POST' })

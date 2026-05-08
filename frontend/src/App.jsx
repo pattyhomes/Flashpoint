@@ -9,10 +9,12 @@ import {
   fetchMapSignals,
   fetchObservations,
   fetchPriorities,
+  fetchSourceRuns,
   fetchSourcesStatus,
   fetchSystemStatus,
   linkObservation,
   promoteObservation,
+  runSourceNow,
 } from './services/api.js'
 
 import Shell from './components/layout/Shell.jsx'
@@ -54,6 +56,10 @@ export default function App() {
   const [priorities, setPriorities] = useState([])
   const [systemStatus, setSystemStatus] = useState(null)
   const [sourceStatus, setSourceStatus] = useState({ sources: [], exception_counts: {} })
+  const [sourceRuns, setSourceRuns] = useState([])
+  const [sourceRunsLoading, setSourceRunsLoading] = useState(false)
+  const [sourceRunBusy, setSourceRunBusy] = useState(null)
+  const [sourceRunError, setSourceRunError] = useState(null)
   const [observations, setObservations] = useState([])
   const [mapSignals, setMapSignals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -123,6 +129,21 @@ export default function App() {
       .finally(() => setObservationsLoading(false))
   }
 
+  function refreshSourceOps() {
+    setSourceRunsLoading(true)
+    return Promise.all([fetchSourcesStatus(), fetchSourceRuns(null, 20)])
+      .then(([sources, runs]) => {
+        setSourceStatus(sources)
+        setSourceRuns(runs.runs || [])
+        setSourceRunError(null)
+      })
+      .catch(error => {
+        console.error('[Flashpoint] source ops error:', error)
+        setSourceRunError('Source operations unavailable')
+      })
+      .finally(() => setSourceRunsLoading(false))
+  }
+
   function refreshConfirmedData() {
     return Promise.all([
       fetchEvents(500, 0),
@@ -130,13 +151,15 @@ export default function App() {
       fetchPriorities(),
       fetchSystemStatus(),
       fetchSourcesStatus(),
+      fetchSourceRuns(null, 20),
       fetchMapSignals(),
-    ]).then(([eventPage, hotspotRows, priorityRows, status, sources, signals]) => {
+    ]).then(([eventPage, hotspotRows, priorityRows, status, sources, sourceRunPage, signals]) => {
       applyEventsPage(eventPage)
       setHotspots(hotspotRows)
       setPriorities(priorityRows)
       setSystemStatus(status)
       setSourceStatus(sources)
+      setSourceRuns(sourceRunPage.runs || [])
       setMapSignals(signals)
       setLastUpdated(new Date())
       setLastPollFailed(false)
@@ -156,15 +179,17 @@ export default function App() {
       fetchPriorities(),
       fetchSystemStatus(),
       fetchSourcesStatus(),
+      fetchSourceRuns(null, 20),
       fetchObservations('lead', activeExceptionCategoryRef.current),
       fetchMapSignals(),
     ])
-      .then(([eventPage, hotspotRows, priorityRows, status, sources, obs, signals]) => {
+      .then(([eventPage, hotspotRows, priorityRows, status, sources, sourceRunPage, obs, signals]) => {
         applyEventsPage(eventPage)
         setHotspots(hotspotRows)
         setPriorities(priorityRows)
         setSystemStatus(status)
         setSourceStatus(sources)
+        setSourceRuns(sourceRunPage.runs || [])
         setObservations(obs)
         setMapSignals(signals)
         setLastUpdated(new Date())
@@ -182,15 +207,17 @@ export default function App() {
         fetchPriorities(),
         fetchSystemStatus(),
         fetchSourcesStatus(),
+        fetchSourceRuns(null, 20),
         fetchObservations('lead', activeExceptionCategoryRef.current),
         fetchMapSignals(),
       ])
-        .then(([eventPage, hotspotRows, priorityRows, status, sources, obs, signals]) => {
+        .then(([eventPage, hotspotRows, priorityRows, status, sources, sourceRunPage, obs, signals]) => {
           mergeEventsPage(eventPage)
           setHotspots(hotspotRows)
           setPriorities(priorityRows)
           setSystemStatus(status)
           setSourceStatus(sources)
+          setSourceRuns(sourceRunPage.runs || [])
           setObservations(obs)
           setMapSignals(signals)
           setLastUpdated(new Date())
@@ -379,6 +406,22 @@ export default function App() {
       .finally(() => setObservationBusyId(null))
   }
 
+  function handleRunSource(sourceName) {
+    setSourceRunBusy(sourceName)
+    setSourceRunError(null)
+    return runSourceNow(sourceName)
+      .then(() => Promise.all([
+        refreshSourceOps(),
+        refreshObservations(activeExceptionCategoryRef.current),
+        refreshConfirmedData(),
+      ]))
+      .catch(error => {
+        console.error('[Flashpoint] source run error:', error)
+        setSourceRunError(`Unable to run ${sourceName}`)
+      })
+      .finally(() => setSourceRunBusy(null))
+  }
+
   const filteredEvents = useMemo(() => events.filter(event => {
     if (!withinWindow(event.occurred_at, timeWindow)) return false
     if (activeTypes.size > 0 && !activeTypes.has(event.event_type)) return false
@@ -510,6 +553,11 @@ export default function App() {
           observationBusyId={observationBusyId}
           observationError={observationError}
           sourceStatus={sourceStatus}
+          sourceRuns={sourceRuns}
+          sourceRunsLoading={sourceRunsLoading}
+          sourceRunBusy={sourceRunBusy}
+          sourceRunError={sourceRunError}
+          onRunSource={handleRunSource}
           activeExceptionCategory={activeExceptionCategory}
           onSetExceptionCategory={handleSetExceptionCategory}
           onPromoteObservation={handlePromoteObservation}

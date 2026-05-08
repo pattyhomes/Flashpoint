@@ -55,7 +55,7 @@ class LocalNewsSource:
     source_name = "local_news"
 
     def __init__(self):
-        self.stats = {"fetched": 0, "rejected": 0, "reject_counts": {}}
+        self.stats = {"fetched": 0, "rejected": 0, "reject_counts": {}, "sample_records": []}
         self.geocoder = LocalGeocoder()
         self._robots_cache: dict[str, robotparser.RobotFileParser] = {}
 
@@ -86,7 +86,13 @@ class LocalNewsSource:
                 candidates.extend(self._parse_feed(response.text, feed_url, domains, feed_names[feed_url]))
             except Exception as exc:
                 print(f"[local_news] Fetch error for {feed_url}: {exc}")
-                self._reject("fetch_error")
+                self._reject("fetch_error", self._sample(
+                    "fetch_error",
+                    title=f"Feed fetch failed: {feed_names[feed_url]}",
+                    link=feed_url,
+                    feed_name=feed_names[feed_url],
+                    reason=str(exc)[:220],
+                ))
         return candidates[: settings.local_news_max_records]
 
     def _feed_configs(self) -> list[tuple[str, set[str], str]]:
@@ -103,7 +109,13 @@ class LocalNewsSource:
         try:
             root = ET.fromstring(text)
         except ET.ParseError:
-            self._reject("parse_error")
+            self._reject("parse_error", self._sample(
+                "parse_error",
+                title=f"Feed parse failed: {feed_name}",
+                link=feed_url,
+                feed_name=feed_name,
+                reason="Feed response was not valid XML/Atom.",
+            ))
             return []
         items = root.findall(".//item") or [node for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "entry"]
         candidates = []
@@ -121,15 +133,27 @@ class LocalNewsSource:
             link_node = item.find("{http://www.w3.org/2005/Atom}link")
             link = link_node.attrib.get("href") if link_node is not None else None
         description = _strip_html(_child_text(item, ("description", "summary", "content")))
-        article_text = self._fetch_article(link, allowed_domains) if settings.local_news_fetch_articles else ""
+        article_text = self._fetch_article(link, allowed_domains, title=title, feed_name=feed_name) if settings.local_news_fetch_articles else ""
         body = " ".join(part for part in [description, article_text] if part)
         result = classify(title=title, body=body, categories=[], concepts=[], min_score=0.55)
         if result is None:
-            self._reject("classified_out")
+            self._reject("classified_out", self._sample(
+                "classified_out",
+                title=title,
+                link=link,
+                feed_name=feed_name,
+                reason="No unrest classifier signal.",
+            ))
             return None
         geocode = self.geocoder.resolve(text=f"{title} {body}")
         if geocode is None:
-            self._reject("bad_location")
+            self._reject("bad_location", self._sample(
+                "bad_location",
+                title=title,
+                link=link,
+                feed_name=feed_name,
+                reason="Local geocoder could not resolve a city/state.",
+            ))
         published_at = _parse_dt(_child_text(item, ("pubDate", "published", "updated")))
         return ObservationCandidate(
             source_type="local_news",
@@ -159,11 +183,24 @@ class LocalNewsSource:
             exception_detail=None if geocode else "Local geocoder could not resolve a city/state.",
         )
 
-    def _fetch_article(self, url: str | None, allowed_domains: set[str]) -> str:
+    def _fetch_article(
+        self,
+        url: str | None,
+        allowed_domains: set[str],
+        *,
+        title: str | None = None,
+        feed_name: str | None = None,
+    ) -> str:
         if not url or _domain(url) not in allowed_domains:
             return ""
         if not self._robots_allows(url):
-            self._reject("robots_disallowed")
+            self._reject("robots_disallowed", self._sample(
+                "robots_disallowed",
+                title=title,
+                link=url,
+                feed_name=feed_name,
+                reason="robots.txt disallowed article fetch.",
+            ))
             return ""
         try:
             time.sleep(0.05)
@@ -174,13 +211,25 @@ class LocalNewsSource:
                 follow_redirects=True,
             )
             response.raise_for_status()
-        except Exception:
-            self._reject("article_fetch_error")
+        except Exception as exc:
+            self._reject("article_fetch_error", self._sample(
+                "article_fetch_error",
+                title=title,
+                link=url,
+                feed_name=feed_name,
+                reason=str(exc)[:220],
+            ))
             return ""
         raw_final_url = getattr(response, "url", None)
         final_url = str(raw_final_url) if isinstance(raw_final_url, (str, httpx.URL)) else url
         if _domain(final_url) not in allowed_domains:
-            self._reject("article_domain_not_allowed")
+            self._reject("article_domain_not_allowed", self._sample(
+                "article_domain_not_allowed",
+                title=title,
+                link=final_url,
+                feed_name=feed_name,
+                reason="Redirected article landed outside the configured allowlist.",
+            ))
             return ""
         text = _strip_html(response.text)
         return text[:4000]
@@ -204,7 +253,31 @@ class LocalNewsSource:
         self._robots_cache[robots_url] = parser
         return parser.can_fetch(settings.local_news_user_agent, url)
 
-    def _reject(self, category: str):
+    def _sample(
+        self,
+        category: str,
+        title: str | None = None,
+        link: str | None = None,
+        feed_name: str | None = None,
+        reason: str | None = None,
+    ) -> dict:
+        return {
+            "category": category,
+            "source_name": feed_name or "Local News",
+            "title": (title or "Untitled")[:180],
+            "source_url": link,
+            "reason": reason,
+        }
+
+    def _reject(self, category: str, sample: dict | None = None):
         self.stats["rejected"] += 1
         counts = self.stats["reject_counts"]
         counts[category] = counts.get(category, 0) + 1
+        if sample and len(self.stats["sample_records"]) < 8:
+            self.stats["sample_records"].append({
+                "category": category,
+                "source_name": sample.get("source_name"),
+                "title": sample.get("title"),
+                "source_url": sample.get("source_url"),
+                "reason": sample.get("reason"),
+            })

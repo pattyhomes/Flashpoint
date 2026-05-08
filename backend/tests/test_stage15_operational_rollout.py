@@ -268,6 +268,61 @@ def test_sources_status_exposes_sample_records(client, db_engine):
     assert source["sample_records"][0]["title"] == "Budget story"
 
 
+def test_local_news_records_diagnostic_samples_for_rejections():
+    from app.services.ingestion.local_news_source import LocalNewsSource
+
+    feed = """<?xml version="1.0"?>
+    <rss version="2.0"><channel>
+      <item>
+        <guid>laist-noise</guid>
+        <title>Best weekend restaurants in Los Angeles</title>
+        <link>https://laist.com/news/food</link>
+        <description>Restaurant week begins in Los Angeles, CA.</description>
+      </item>
+    </channel></rss>
+    """
+    feed_response = MagicMock(text=feed)
+    feed_response.raise_for_status.return_value = None
+    robots_response = MagicMock(text="User-agent: *\nAllow: /\n", status_code=200)
+    robots_response.raise_for_status.return_value = None
+    article_response = MagicMock(
+        text="<article>Food and lifestyle coverage.</article>",
+        url="https://laist.com/news/food",
+    )
+    article_response.raise_for_status.return_value = None
+
+    def fake_get(url, **_kwargs):
+        if url == "https://laist.com/news.rss":
+            return feed_response
+        if url == "https://laist.com/robots.txt":
+            return robots_response
+        if url == "https://laist.com/news/food":
+            return article_response
+        raise AssertionError(f"unexpected URL: {url}")
+
+    with (
+        patch("app.config.settings.local_news_enabled", True),
+        patch("app.config.settings.local_news_feed_urls", ""),
+        patch("app.config.settings.local_news_allowed_domains", ""),
+        patch("app.config.settings.local_news_max_records", 5),
+        patch("app.services.ingestion.rss_registry.load_enabled_local_news_feeds") as load_feeds,
+        patch("app.services.ingestion.local_news_source.httpx.get", side_effect=fake_get),
+    ):
+        load_feeds.return_value = [
+            type(
+                "Feed",
+                (),
+                {"name": "LAist", "feed_url": "https://laist.com/news.rss", "allowed_domains": ("laist.com",)},
+            )()
+        ]
+        source = LocalNewsSource()
+        candidates = source.fetch()
+
+    assert candidates == []
+    assert source.stats["sample_records"][0]["category"] == "classified_out"
+    assert source.stats["sample_records"][0]["title"] == "Best weekend restaurants in Los Angeles"
+
+
 def test_expanded_geocoder_resolves_alias_and_county():
     from app.services.geocoding import LocalGeocoder
 

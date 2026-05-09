@@ -236,6 +236,58 @@ def test_hotspot_trend_endpoint_returns_24_hourly_buckets():
         Base.metadata.drop_all(bind=engine)
 
 
+def test_hotspot_trends_endpoint_returns_bulk_24_hourly_buckets():
+    engine = _engine()
+    db = _session(engine)
+    db.add(Hotspot(
+        id=1,
+        name="Philadelphia Metro",
+        centroid_lat=39.9526,
+        centroid_lon=-75.1652,
+        event_count=2,
+        confidence_score=0.7,
+        severity_score=0.6,
+        momentum_score=0.5,
+        priority_score=0.62,
+        trend_state="stable",
+        status_label="Active Hotspot",
+        last_computed_at=datetime(2026, 5, 7, 13, 0, 0),
+    ))
+    db.add(Hotspot(
+        id=2,
+        name="Los Angeles Metro",
+        centroid_lat=34.0522,
+        centroid_lon=-118.2437,
+        event_count=1,
+        confidence_score=0.6,
+        severity_score=0.5,
+        momentum_score=0.4,
+        priority_score=0.55,
+        trend_state="declining",
+        status_label="Active Hotspot",
+        last_computed_at=datetime(2026, 5, 7, 13, 0, 0),
+    ))
+    db.add(_event(source_id="bulk-trend-1", cluster_id=1, occurred_at=datetime(2026, 5, 7, 12, 15, 0), severity_score=0.4))
+    db.add(_event(source_id="bulk-trend-2", cluster_id=2, occurred_at=datetime(2026, 5, 7, 11, 45, 0), severity_score=0.7))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/trends?ids=1,2,999&hours=24&now=2026-05-07T13:00:00")
+        assert response.status_code == 200
+        body = response.json()
+        assert [trend["hotspot_id"] for trend in body["trends"]] == [1, 2]
+        assert all(len(trend["buckets"]) == 24 for trend in body["trends"])
+        first = next(trend for trend in body["trends"] if trend["hotspot_id"] == 1)
+        bucket = next(item for item in first["buckets"] if item["bucket_start"].startswith("2026-05-07T12:00:00"))
+        assert bucket["event_count"] == 1
+        assert bucket["max_severity"] == 0.4
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
 def test_reset_and_seed_clears_v3_evidence_observation_and_source_rows():
     import app.jobs.seed as seed_module
 

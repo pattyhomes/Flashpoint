@@ -6,6 +6,7 @@ import {
   fetchHotspotDetail,
   fetchHotspots,
   fetchHotspotTrend,
+  fetchHotspotTrends,
   fetchMapSignals,
   fetchObservations,
   fetchPriorities,
@@ -54,6 +55,7 @@ export default function App() {
   const [eventsLoadingMore, setEventsLoadingMore] = useState(false)
   const [hotspots, setHotspots] = useState([])
   const [priorities, setPriorities] = useState([])
+  const [priorityTrends, setPriorityTrends] = useState({})
   const [systemStatus, setSystemStatus] = useState(null)
   const [sourceStatus, setSourceStatus] = useState({ sources: [], exception_counts: {} })
   const [sourceRuns, setSourceRuns] = useState([])
@@ -144,6 +146,24 @@ export default function App() {
       .finally(() => setSourceRunsLoading(false))
   }
 
+  function refreshPriorityTrends(priorityRows) {
+    const ids = priorityRows.slice(0, 30).map(priority => priority.id)
+    if (ids.length === 0) {
+      setPriorityTrends({})
+      return Promise.resolve({})
+    }
+    return fetchHotspotTrends(ids, 24)
+      .then(payload => {
+        const next = Object.fromEntries((payload.trends || []).map(trend => [trend.hotspot_id, trend]))
+        setPriorityTrends(next)
+        return next
+      })
+      .catch(error => {
+        console.error('[Flashpoint] priority trend error:', error)
+        return {}
+      })
+  }
+
   function refreshConfirmedData() {
     return Promise.all([
       fetchEvents(500, 0),
@@ -163,6 +183,7 @@ export default function App() {
       setMapSignals(signals)
       setLastUpdated(new Date())
       setLastPollFailed(false)
+      refreshPriorityTrends(priorityRows)
     })
   }
 
@@ -193,6 +214,7 @@ export default function App() {
         setObservations(obs)
         setMapSignals(signals)
         setLastUpdated(new Date())
+        refreshPriorityTrends(priorityRows)
       })
       .catch(error => {
         console.error('[Flashpoint] initial fetch error:', error)
@@ -222,6 +244,7 @@ export default function App() {
           setMapSignals(signals)
           setLastUpdated(new Date())
           setLastPollFailed(false)
+          refreshPriorityTrends(priorityRows)
 
           const selected = selectedItemRef.current
           if (selected?.type === 'hotspot') {
@@ -537,6 +560,7 @@ export default function App() {
           activeTab={rightTab}
           onSetTab={setRightTab}
           priorities={filteredPriorities}
+          priorityTrends={priorityTrends}
           selectedItem={selectedItem}
           onSelect={handleSelect}
           detailProps={{

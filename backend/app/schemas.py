@@ -173,6 +173,10 @@ class HotspotTrendOut(BaseModel):
     buckets: list[HotspotTrendBucket]
 
 
+class HotspotTrendListOut(BaseModel):
+    trends: list[HotspotTrendOut]
+
+
 class HealthResponse(BaseModel):
     status: str
     service: str

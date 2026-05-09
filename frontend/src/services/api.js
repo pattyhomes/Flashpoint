@@ -13,6 +13,12 @@ export const fetchEventDetail   = (id)                      => request(`/events/
 export const fetchHotspots      = ()                        => request('/hotspots/')
 export const fetchHotspotDetail = (id)                      => request(`/hotspots/${id}`)
 export const fetchHotspotTrend  = (id, hours = 24)           => request(`/hotspots/${id}/trend?hours=${hours}`)
+export const fetchHotspotTrends = (ids, hours = 24) => {
+  const params = new URLSearchParams()
+  params.set('ids', ids.join(','))
+  params.set('hours', String(hours))
+  return request(`/hotspots/trends?${params.toString()}`)
+}
 export const fetchPriorities    = ()                        => request('/priorities/')
 export const fetchSystemStatus  = ()                        => request('/system/status')
 export const fetchSourcesStatus = ()                        => request('/sources/status')

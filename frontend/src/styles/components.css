@@ -467,9 +467,12 @@
 .v3-priority-card {
   position: relative;
   width: 100%;
-  min-height: 88px;
+  min-height: 122px;
   display: grid;
-  grid-template-columns: 3px 28px 1fr 44px 42px;
+  grid-template-columns: 3px 28px minmax(0, 1fr) 74px 42px;
+  grid-template-areas:
+    "stripe rank body scores trend"
+    "stripe rank timeline timeline timeline";
   align-items: center;
   gap: 8px;
   padding: 8px 10px 8px 0;
@@ -486,6 +489,7 @@
 }
 
 .v3-priority-card__stripe {
+  grid-area: stripe;
   align-self: stretch;
   background: var(--line-strong);
 }
@@ -495,6 +499,7 @@
 .v3-priority-card--stable .v3-priority-card__stripe { background: var(--accent-2); }
 
 .v3-priority-card__rank {
+  grid-area: rank;
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--t-2);
@@ -502,6 +507,7 @@
 }
 
 .v3-priority-card__body {
+  grid-area: body;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -531,22 +537,123 @@
   gap: 9px;
 }
 
-.mini-bars {
-  height: 40px;
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
+.priority-score-bars {
+  grid-area: scores;
+  width: 74px;
+  display: grid;
+  gap: 4px;
 }
 
-.mini-bars i {
-  width: 4px;
-  background: rgba(255,181,36,0.75);
+.priority-score-bar {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+}
+
+.priority-score-bar span {
+  color: var(--t-2);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  line-height: 1;
+}
+
+.priority-score-bar i {
+  height: 5px;
+  display: block;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.priority-score-bar b {
+  height: 100%;
+  display: block;
+  background: rgba(109,179,255,0.70);
+}
+
+.priority-score-bar--pri b { background: rgba(255,181,36,0.82); }
+.priority-score-bar--sev b { background: rgba(231,89,73,0.78); }
+.priority-score-bar--mom b { background: rgba(95,216,163,0.76); }
+.priority-score-bar--conf b { background: rgba(109,179,255,0.74); }
+
+.source-ratio-bar {
+  width: 100%;
+  height: 7px;
+  display: flex;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.source-ratio-bar i {
+  min-width: 0;
+  height: 100%;
+  display: block;
+}
+
+.source-ratio-bar__accepted {
+  background: rgba(95,216,163,0.82);
+}
+
+.source-ratio-bar__rejected {
+  background: rgba(231,89,73,0.78);
+}
+
+.source-ratio-bar__remainder {
+  background: rgba(255,255,255,0.12);
 }
 
 .v3-priority-card__trend {
+  grid-area: trend;
   font-family: var(--font-mono);
   font-size: 10px;
   text-align: right;
+}
+
+.priority-timeline {
+  grid-area: timeline;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: end;
+  gap: 8px;
+}
+
+.priority-timeline__head {
+  display: grid;
+  gap: 2px;
+  color: var(--t-2);
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+.priority-timeline__head b {
+  color: var(--t-0);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.priority-timeline__head i {
+  color: var(--t-2);
+  font-size: 8px;
+  font-style: normal;
+}
+
+.priority-timeline__bars {
+  height: 22px;
+  display: grid;
+  grid-template-columns: repeat(24, minmax(1px, 1fr));
+  align-items: end;
+  gap: 1px;
+}
+
+.priority-timeline__bars i {
+  min-height: 3px;
+  display: block;
+  background: rgba(255,255,255,0.08);
+}
+
+.priority-timeline__bars i.has-events {
+  background: rgba(255,181,36,0.82);
 }
 
 .trend--escalating { color: var(--up); }
@@ -681,18 +788,24 @@
 }
 
 .source-breakdown__row {
-  min-height: 24px;
+  min-height: 32px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
+  gap: 4px;
   padding: 4px 6px;
   border-left: 2px solid rgba(109,179,255,0.22);
   background: rgba(255, 255, 255, 0.025);
 }
 
-.source-breakdown__row b,
-.source-breakdown__row span {
+.source-breakdown__meta {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-breakdown__meta b,
+.source-breakdown__meta span {
   overflow: hidden;
   font-family: var(--font-mono);
   font-size: 9px;
@@ -700,7 +813,7 @@
   text-overflow: ellipsis;
 }
 
-.source-breakdown__row span {
+.source-breakdown__meta span {
   color: var(--t-2);
 }
 

@@ -12,6 +12,33 @@ function formatCount(value) {
   return Number.isFinite(Number(value)) ? Number(value).toLocaleString() : '0'
 }
 
+function ratioParts(fetched, accepted, rejected) {
+  const total = Math.max(Number(fetched) || 0, (Number(accepted) || 0) + (Number(rejected) || 0), 1)
+  return {
+    accepted: Math.max(0, Math.min(100, ((Number(accepted) || 0) / total) * 100)),
+    rejected: Math.max(0, Math.min(100, ((Number(rejected) || 0) / total) * 100)),
+  }
+}
+
+function SourceRatioBar({ fetched, accepted, rejected, label }) {
+  const parts = ratioParts(fetched, accepted, rejected)
+  const acceptedWidth = parts.accepted
+  const rejectedWidth = parts.rejected
+  const unclassifiedWidth = Math.max(0, 100 - acceptedWidth - rejectedWidth)
+
+  return (
+    <span
+      className="source-ratio-bar"
+      aria-label={`${label}: ${formatCount(fetched)} fetched, ${formatCount(accepted)} accepted, ${formatCount(rejected)} rejected`}
+      title={`${formatCount(fetched)} fetched / ${formatCount(accepted)} accepted / ${formatCount(rejected)} rejected`}
+    >
+      <i className="source-ratio-bar__accepted" style={{ width: `${acceptedWidth}%` }} />
+      <i className="source-ratio-bar__rejected" style={{ width: `${rejectedWidth}%` }} />
+      {unclassifiedWidth > 0 && <i className="source-ratio-bar__remainder" style={{ width: `${unclassifiedWidth}%` }} />}
+    </span>
+  )
+}
+
 function SourceHealth({ sourceStatus, systemStatus, sourceRunBusy, onRunSource }) {
   const sources = sourceStatus?.sources || []
   const totalSources = sources.length || systemStatus?.source_count || 0
@@ -87,8 +114,16 @@ function SourceHealth({ sourceStatus, systemStatus, sourceRunBusy, onRunSource }
                   <div className="source-breakdown">
                     {breakdown.slice(0, 4).map(feed => (
                       <div className="source-breakdown__row" key={`${source.source_name}-${feed.source_name}`}>
-                        <b>{feed.source_name || 'Feed'}</b>
-                        <span>F {formatCount(feed.records_fetched)} A {formatCount(feed.observations_inserted)} R {formatCount(feed.records_rejected)}</span>
+                        <div className="source-breakdown__meta">
+                          <b>{feed.source_name || 'Feed'}</b>
+                          <span>F {formatCount(feed.records_fetched)} A {formatCount(feed.observations_inserted)} R {formatCount(feed.records_rejected)}</span>
+                        </div>
+                        <SourceRatioBar
+                          fetched={feed.records_fetched}
+                          accepted={feed.observations_inserted}
+                          rejected={feed.records_rejected}
+                          label={feed.source_name || 'Feed'}
+                        />
                       </div>
                     ))}
                   </div>
@@ -122,6 +157,12 @@ function SourceRuns({ runs, loading }) {
             <div>
               <b>{labelize(run.source_name)}</b>
               <span>{relativeTime(run.finished_at || run.started_at)}</span>
+              <SourceRatioBar
+                fetched={run.records_fetched}
+                accepted={run.observations_inserted}
+                rejected={run.records_rejected}
+                label={run.source_name || 'source run'}
+              />
             </div>
             <dl>
               <dt>F</dt><dd>{formatCount(run.records_fetched)}</dd>
@@ -172,6 +213,7 @@ export default function RightRail({
   activeTab,
   onSetTab,
   priorities,
+  priorityTrends,
   selectedItem,
   onSelect,
   detailProps,
@@ -245,7 +287,12 @@ export default function RightRail({
           />
         </div>
       ) : (
-        <PriorityList priorities={priorities} selectedItem={selectedItem} onSelect={onSelect} />
+        <PriorityList
+          priorities={priorities}
+          priorityTrends={priorityTrends}
+          selectedItem={selectedItem}
+          onSelect={onSelect}
+        />
       )}
     </div>
   )

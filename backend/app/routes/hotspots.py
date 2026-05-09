@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Event, Hotspot
-from app.schemas import HotspotDetailOut, HotspotOut, HotspotTrendOut
+from app.schemas import HotspotDetailOut, HotspotOut, HotspotTrendListOut, HotspotTrendOut
 
 router = APIRouter(prefix="/hotspots", tags=["hotspots"])
 
@@ -20,18 +20,8 @@ def _hour_floor(value: datetime) -> datetime:
     return value.replace(minute=0, second=0, microsecond=0)
 
 
-@router.get("/{hotspot_id}/trend", response_model=HotspotTrendOut)
-def hotspot_trend(
-    hotspot_id: int,
-    hours: int = Query(24, ge=1, le=72),
-    now: datetime | None = Query(None),
-    db: Session = Depends(get_db),
-):
-    hotspot = db.query(Hotspot).filter(Hotspot.id == hotspot_id).first()
-    if not hotspot:
-        raise HTTPException(status_code=404, detail="Hotspot not found")
-
-    end_bucket = _hour_floor(now or datetime.utcnow())
+def _trend_payload(hotspot_id: int, hours: int, now: datetime, db: Session) -> dict:
+    end_bucket = _hour_floor(now)
     start_bucket = end_bucket - timedelta(hours=hours - 1)
     end_exclusive = end_bucket + timedelta(hours=1)
     events = (
@@ -66,6 +56,57 @@ def hotspot_trend(
         })
 
     return {"hotspot_id": hotspot_id, "hours": hours, "buckets": buckets}
+
+
+@router.get("/trends", response_model=HotspotTrendListOut)
+def hotspot_trends(
+    ids: str = Query(..., min_length=1),
+    hours: int = Query(24, ge=1, le=72),
+    now: datetime | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    hotspot_ids: list[int] = []
+    for raw_id in ids.split(","):
+        raw_id = raw_id.strip()
+        if not raw_id:
+            continue
+        try:
+            hotspot_id = int(raw_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="ids must be comma-separated integers") from None
+        if hotspot_id not in hotspot_ids:
+            hotspot_ids.append(hotspot_id)
+    if not hotspot_ids:
+        raise HTTPException(status_code=400, detail="ids must include at least one hotspot id")
+    if len(hotspot_ids) > 30:
+        raise HTTPException(status_code=400, detail="ids may include at most 30 hotspot ids")
+
+    existing_ids = {
+        row[0]
+        for row in db.query(Hotspot.id).filter(Hotspot.id.in_(hotspot_ids)).all()
+    }
+    trend_now = now or datetime.utcnow()
+    return {
+        "trends": [
+            _trend_payload(hotspot_id, hours, trend_now, db)
+            for hotspot_id in hotspot_ids
+            if hotspot_id in existing_ids
+        ],
+    }
+
+
+@router.get("/{hotspot_id}/trend", response_model=HotspotTrendOut)
+def hotspot_trend(
+    hotspot_id: int,
+    hours: int = Query(24, ge=1, le=72),
+    now: datetime | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    hotspot = db.query(Hotspot).filter(Hotspot.id == hotspot_id).first()
+    if not hotspot:
+        raise HTTPException(status_code=404, detail="Hotspot not found")
+
+    return _trend_payload(hotspot_id, hours, now or datetime.utcnow(), db)
 
 
 @router.get("/{hotspot_id}", response_model=HotspotDetailOut)

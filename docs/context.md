@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-05-07
+Last updated: 2026-05-09
 
 ## Current State
 
@@ -88,6 +88,20 @@ sources. Confirmed-source and hotspot rules remain unchanged.
 Next work after rollout is threshold tuning against real ingest output, expanding
 the eval fixture set with sampled false positives, and deciding whether source
 volume justifies Stage 2 Postgres/PostGIS + workers.
+
+2026-05-09 source tuning pass:
+
+- Pi manual `nws` run fetched 252 active alerts and inserted 11 new context
+  observations after dedupe.
+- Pi manual `local_news` run with the Stage 1.5 rollout override fetched 32
+  regional RSS items and rejected all 32 as `classified_out`; samples were
+  ordinary civic/general news, so the broad pilot feeds remain enabled but
+  annotated as healthy noisy feeds.
+- The eval smoke fixture now includes sampled LAist false positives from that
+  Pi run.
+- Non-persisted Bluesky probe returned 403 from the public search endpoint; keep
+  Bluesky disabled until authenticated access or adapter changes are available.
+- Current volume does not justify Stage 2 Postgres/PostGIS + workers yet.
 
 See `docs/data-upgrade-plan.md`.
 

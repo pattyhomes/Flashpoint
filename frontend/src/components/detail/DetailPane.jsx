@@ -103,6 +103,95 @@ function CitationRefs({ ids = [], citationsById }) {
   )
 }
 
+function WhyNowSection({ whyNow, citationsById }) {
+  if (!whyNow) return null
+  const delta = whyNow.change_count > 0 ? `+${whyNow.change_count}` : String(whyNow.change_count)
+  return (
+    <div className="briefing-block">
+      <div className="briefing-block__title">
+        <span>Why Now</span>
+        <b>{whyNow.current_24h_count} / 24H</b>
+      </div>
+      <p>{whyNow.summary}</p>
+      <div className="briefing-window-strip">
+        <span><b>NOW</b>{whyNow.current_24h_count}</span>
+        <span><b>PRIOR</b>{whyNow.previous_24h_count}</span>
+        <span><b>DELTA</b>{delta}</span>
+        <span><b>MOM</b>{pct(whyNow.momentum_score)}</span>
+      </div>
+      <div className="briefing-drivers">
+        {(whyNow.drivers || []).map(driver => (
+          <div key={driver.label} className="briefing-driver">
+            <span>{driver.label}</span>
+            <b>{driver.value}</b>
+            <em>{driver.detail}</em>
+            <CitationRefs ids={driver.citation_ids} citationsById={citationsById} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function WhatHappenedSection({ whatHappened, citationsById }) {
+  if (!whatHappened) return null
+  return (
+    <div className="briefing-block">
+      <div className="briefing-block__title">
+        <span>What Happened</span>
+        <b>{(whatHappened.timeline_groups || []).length} WINDOWS</b>
+      </div>
+      <p>{whatHappened.summary}</p>
+      <div className="briefing-type-strip">
+        {(whatHappened.dominant_event_types || []).slice(0, 4).map(type => (
+          <span key={type.label}><b>{type.label}</b>{type.value}</span>
+        ))}
+      </div>
+      <div className="briefing-group-list">
+        {(whatHappened.timeline_groups || []).map(group => (
+          <div key={group.label} className="briefing-group">
+            <div className="briefing-group__head">
+              <span>{group.label}</span>
+              <b>{group.event_count} EVT</b>
+              <em>{group.dominant_event_type || 'activity'}</em>
+              <CitationRefs ids={group.citation_ids} citationsById={citationsById} />
+            </div>
+            <p>{group.summary}</p>
+            {(group.representative_events || []).slice(0, 2).map(event => (
+              <div key={event.event_id} className="briefing-group-event">
+                <span>{relativeTime(event.occurred_at)}</span>
+                <b>{event.title}</b>
+                <CitationRefs ids={event.citation_ids} citationsById={citationsById} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SourceReadSection({ sourceAssessment }) {
+  if (!sourceAssessment) return null
+  return (
+    <div className="briefing-block briefing-block--source">
+      <div className="briefing-block__title">
+        <span>Source Read</span>
+        <b>{sourceAssessment.citation_count_returned}/{sourceAssessment.citation_count_total} CITES</b>
+      </div>
+      <p>{sourceAssessment.summary}</p>
+      <div className="briefing-source-strip">
+        <span><b>COUNTED</b>{sourceAssessment.counted_source_count}</span>
+        <span><b>PROV</b>{sourceAssessment.provenance_only_count}</span>
+        <span><b>FAMILIES</b>{(sourceAssessment.counted_source_families || []).join(', ') || 'none'}</span>
+      </div>
+      <div className="briefing-source-notes">
+        {(sourceAssessment.notes || []).map(note => <span key={note}>{note}</span>)}
+      </div>
+    </div>
+  )
+}
+
 function HotspotBriefing({ briefing, loading }) {
   if (loading && !briefing) {
     return (
@@ -128,25 +217,9 @@ function HotspotBriefing({ briefing, loading }) {
         <b>{briefing.headline}</b>
         <p>{briefing.why_it_matters}</p>
       </div>
-      <div className="briefing-facts">
-        {(briefing.key_facts || []).map(fact => (
-          <div key={fact.label} className="briefing-fact">
-            <span>{fact.label}</span>
-            <b>{fact.value}</b>
-            <CitationRefs ids={fact.citation_ids} citationsById={citationsById} />
-          </div>
-        ))}
-      </div>
-      <div className="briefing-timeline">
-        {(briefing.timeline || []).map(item => (
-          <div key={item.event_id} className="briefing-timeline-row">
-            <span>{relativeTime(item.occurred_at)}</span>
-            <b>{item.title}</b>
-            <em>{item.location}</em>
-            <CitationRefs ids={item.citation_ids} citationsById={citationsById} />
-          </div>
-        ))}
-      </div>
+      <WhyNowSection whyNow={briefing.why_now} citationsById={citationsById} />
+      <WhatHappenedSection whatHappened={briefing.what_happened} citationsById={citationsById} />
+      <SourceReadSection sourceAssessment={briefing.source_assessment} />
       {(briefing.citations || []).length > 0 && (
         <div className="briefing-citation-ledger">
           {briefing.citations.slice(0, 6).map(citation => (

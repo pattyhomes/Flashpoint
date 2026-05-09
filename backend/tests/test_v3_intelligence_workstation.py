@@ -14,6 +14,7 @@ from app.services.intelligence import (
     record_evidence,
     record_observation,
 )
+from app.utils.time import utcnow_naive
 
 
 def _engine():
@@ -455,6 +456,151 @@ def test_hotspot_briefing_excludes_unlinked_observations_from_claims():
         assert "Confirmed downtown protest" in serialized
         assert "Unverified courthouse rumor" not in serialized
         assert len(body["timeline"]) == 1
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_why_now_compares_current_and_prior_windows():
+    engine = _engine()
+    db = _session(engine)
+    now = utcnow_naive()
+    db.add(_hotspot(trend_state="escalating", momentum_score=0.7))
+    db.add(_event(source_id="why-now-current-1", occurred_at=now - timedelta(hours=2), severity_score=0.8))
+    db.add(_event(source_id="why-now-current-2", occurred_at=now - timedelta(hours=4), severity_score=0.6))
+    db.add(_event(source_id="why-now-prior", occurred_at=now - timedelta(hours=30), severity_score=0.2))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["why_now"]["current_24h_count"] == 2
+        assert body["why_now"]["previous_24h_count"] == 1
+        assert body["why_now"]["change_count"] == 1
+        assert body["why_now"]["severity_change"] == 0.5
+        assert body["why_now"]["trend_explanation"].startswith("Escalating:")
+        assert "an escalating trend" in body["why_it_matters"]
+        assert "a escalating" not in body["why_it_matters"]
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_groups_what_happened_and_preserves_referenced_citations_under_cap():
+    engine = _engine()
+    db = _session(engine)
+    now = utcnow_naive()
+    db.add(_hotspot(event_count=36))
+    for index in range(36):
+        event = _event(
+            source_id=f"grouped-{index}",
+            title=f"Confirmed event {index}",
+            event_type="protest" if index < 24 else "violence",
+            city="Philadelphia" if index % 2 == 0 else "Camden",
+            state="PA" if index % 2 == 0 else "NJ",
+            occurred_at=now - timedelta(hours=index + 1),
+            severity_score=0.9 if index % 5 == 0 else 0.4,
+        )
+        db.add(event)
+        db.flush()
+        db.add(EventSource(
+            event_id=event.id,
+            source_type="eventregistry",
+            source_record_id=f"grouped-source-{index}",
+            source_name=f"Outlet {index}",
+            source_url=f"https://example.test/{index}",
+            source_title=f"Confirmed event source {index}",
+            source_published_at=event.occurred_at,
+            source_trust_weight=1.0,
+            location_precision="city",
+        ))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body["citations"]) <= 30
+        assert body["what_happened"]["timeline_groups"]
+        assert body["what_happened"]["dominant_event_types"][0]["label"] == "protest"
+        returned_ids = {citation["id"] for citation in body["citations"]}
+        referenced_ids = set()
+        for fact in body["key_facts"]:
+            referenced_ids.update(fact["citation_ids"])
+        for driver in body["why_now"]["drivers"]:
+            referenced_ids.update(driver["citation_ids"])
+        for group in body["what_happened"]["timeline_groups"]:
+            referenced_ids.update(group["citation_ids"])
+            for event in group["representative_events"]:
+                referenced_ids.update(event["citation_ids"])
+        assert referenced_ids
+        assert referenced_ids <= returned_ids
+        assert body["source_assessment"]["citation_count_total"] > body["source_assessment"]["citation_count_returned"]
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_source_assessment_counts_families_not_provenance_only():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_hotspot())
+    event = _event(source_id="source-assess", source_name="gdelt")
+    db.add(event)
+    db.flush()
+    db.add(EventSource(
+        event_id=event.id,
+        source_type="eventregistry",
+        source_record_id="news-source",
+        source_name="WHYY",
+        source_trust_weight=1.0,
+    ))
+    db.add(EventSource(
+        event_id=event.id,
+        source_type="bluesky",
+        source_record_id="social-copy",
+        source_name="Bluesky",
+        source_trust_weight=0.0,
+    ))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["source_assessment"]["counted_source_families"] == ["gdelt", "news"]
+        assert body["source_assessment"]["counted_source_count"] == 2
+        assert body["source_assessment"]["provenance_only_count"] == 1
+        assert any(citation["source_type"] == "bluesky" and not citation["counted"] for citation in body["citations"])
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_empty_hotspot_returns_depth_sections_with_caveat():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_hotspot(event_count=0, confidence_score=0.4))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["why_now"]["current_24h_count"] == 0
+        assert body["what_happened"]["timeline_groups"] == []
+        assert body["source_assessment"]["counted_source_count"] == 0
+        assert "No active confirmed events" in body["what_happened"]["summary"]
+        assert any("no active confirmed member events" in caveat.lower() for caveat in body["caveats"])
     finally:
         app.dependency_overrides.clear()
         db.close()

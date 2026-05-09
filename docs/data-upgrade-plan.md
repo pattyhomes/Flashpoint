@@ -156,6 +156,11 @@ Ollama/Llama service summarizing those cached packets with citations preserved.
 The Raspberry Pi remains a lightweight display appliance and must not host heavy
 model inference.
 
+The next deterministic slice is also implemented: hotspot briefings now include
+"why now" comparisons, grouped "what happened" incident windows, source
+assessment, capped citations, and a model-ready packet. This deepens the
+intelligence layer while staying SQLite-first and model-free at runtime.
+
 ## Recommended Next Sprint
 
 After Stage 1.5 operational rollout:

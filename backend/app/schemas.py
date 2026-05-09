@@ -206,6 +206,69 @@ class HotspotBriefingCitation(BaseModel):
     note: str
 
 
+class HotspotBriefingDriver(BaseModel):
+    label: str
+    value: str
+    detail: str
+    citation_ids: list[int] = Field(default_factory=list)
+
+
+class HotspotBriefingWhyNow(BaseModel):
+    summary: str
+    current_24h_count: int
+    previous_24h_count: int
+    change_count: int
+    change_percent: float | None = None
+    current_avg_severity: float
+    previous_avg_severity: float
+    severity_change: float
+    momentum_score: float
+    momentum_change: float
+    trend_explanation: str
+    drivers: list[HotspotBriefingDriver] = Field(default_factory=list)
+
+
+class HotspotBriefingEventRef(BaseModel):
+    event_id: int
+    occurred_at: datetime
+    title: str
+    event_type: str
+    location: str
+    severity_score: float
+    confidence_score: float
+    citation_ids: list[int] = Field(default_factory=list)
+
+
+class HotspotBriefingTimelineGroup(BaseModel):
+    label: str
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    event_count: int
+    dominant_event_type: str | None = None
+    locations: list[str] = Field(default_factory=list)
+    summary: str
+    representative_events: list[HotspotBriefingEventRef] = Field(default_factory=list)
+    citation_ids: list[int] = Field(default_factory=list)
+
+
+class HotspotBriefingWhatHappened(BaseModel):
+    summary: str
+    dominant_event_types: list[HotspotBriefingFact] = Field(default_factory=list)
+    affected_locations: list[str] = Field(default_factory=list)
+    timeline_groups: list[HotspotBriefingTimelineGroup] = Field(default_factory=list)
+
+
+class HotspotBriefingSourceAssessment(BaseModel):
+    summary: str
+    counted_source_families: list[str] = Field(default_factory=list)
+    counted_source_count: int
+    counted_citation_count: int
+    provenance_only_count: int
+    citation_count_returned: int
+    citation_count_total: int
+    notes: list[str] = Field(default_factory=list)
+
+
 class HotspotBriefingOut(BaseModel):
     hotspot_id: int
     generated_at: datetime
@@ -215,6 +278,10 @@ class HotspotBriefingOut(BaseModel):
     timeline: list[HotspotBriefingTimelineItem] = Field(default_factory=list)
     citations: list[HotspotBriefingCitation] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
+    why_now: HotspotBriefingWhyNow | None = None
+    what_happened: HotspotBriefingWhatHappened | None = None
+    source_assessment: HotspotBriefingSourceAssessment | None = None
+    model_packet: dict = Field(default_factory=dict)
 
 
 class HealthResponse(BaseModel):

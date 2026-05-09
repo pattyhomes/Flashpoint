@@ -22,7 +22,7 @@ Last updated: 2026-05-09
 | Auto-link/auto-promote safety rules | initial implementation done |
 | Stage 1.5 source health, Census geocoder, local news/RSS | done |
 | Hotspot trend endpoint | done |
-| Deterministic Hotspot Briefing v1 | done |
+| Deterministic Hotspot Briefing v1 + intelligence-depth packet | done |
 | Local bundled fonts | done |
 
 ## Active Direction
@@ -40,6 +40,12 @@ events and cited provenance. It is safe to run in the current Pi-local
 FastAPI/SQLite app because it does not call local models or add background AI
 work. Future generated summaries should use a Mac Mini-hosted Ollama/Llama
 service over cached briefing packets; the Pi remains display-only.
+
+The current intelligence-depth slice extends those briefings with deterministic
+"why now", grouped "what happened", source assessment, capped citations, and a
+model-ready packet for future Mac Mini/Ollama summarization. Confirmed events
+remain the only basis for briefing claims; weak/context observations remain
+context-only.
 
 ## Current Branch/Deployment
 

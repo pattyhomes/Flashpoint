@@ -10,6 +10,7 @@ import app.jobs.seed as seed_module
 from app.database import Base
 from app.models import Event, EvidenceItem, IngestRun, Observation
 from app.schemas import EventCreate
+from app.services.article_metadata import ArticleMetadata
 from app.services.ingestion.base import ObservationCandidate
 
 
@@ -68,6 +69,7 @@ def test_gdelt_ingestion_records_evidence_and_promoted_observation(db_engine):
     with (
         patch("app.jobs.seed.SessionLocal", side_effect=lambda: Session()),
         patch("app.services.ingestion.gdelt_source.GdeltSource.fetch", return_value=[make_event()]),
+        patch("app.jobs.seed.fetch_article_metadata", return_value=ArticleMetadata("Protest reported in Philadelphia", "A protest was reported in Philadelphia.", "https://example.com/source")),
         patch("app.jobs.seed.compute_hotspots"),
     ):
         seed_module.run_gdelt_ingestion()

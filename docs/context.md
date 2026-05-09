@@ -52,6 +52,14 @@ detail, member events, and the incident feed. Generic GDELT classifications must
 not be presented as concrete incident explanations; high-volume broad-location
 clusters should show explicit low-specificity/source-gap language.
 
+The active data-quality push makes GDELT detector-first. New broad GDELT records
+stay as evidence/observations, while city/venue detector records need safe
+article metadata or later corroboration before they create hotspot-eligible
+events. Hotspot scoring now filters out detector-only/broad detector events, and
+briefings surface excluded detector activity as caveat/context rather than "what
+happened." Source operations expose enriched, gated, detector-only, and
+hotspot-eligible counts.
+
 ## Current Branch/Deployment
 
 Recent work is merged to `main`.
@@ -110,6 +118,11 @@ sources. Confirmed-source and hotspot rules remain unchanged.
 Next work after rollout is threshold tuning against real ingest output, expanding
 the eval fixture set with sampled false positives, and deciding whether source
 volume justifies Stage 2 Postgres/PostGIS + workers.
+
+Specificity uplift rollout adds `scripts/backfill_event_specificity.py` for
+dry-run-first enrichment of recent GDELT history. Use dry run before apply mode;
+the tool enriches existing evidence/source titles and recomputes hotspots, but
+does not delete history or rebuild the database.
 
 2026-05-09 source tuning pass:
 

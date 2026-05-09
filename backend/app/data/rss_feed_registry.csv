@@ -1,8 +1,8 @@
-name,feed_url,allowed_domains,region,source_family,enabled,notes
-LAist,https://laist.com/news.rss,laist.com,Los Angeles CA,news,true,Regional pilot feed; 2026-05-09 Pi smoke classified_out only
-Texas Tribune,https://feeds.texastribune.org/feeds/main/,feeds.texastribune.org;www.texastribune.org,Texas,news,true,Regional pilot feed; 2026-05-09 Pi smoke classified_out only
-WHYY Philadelphia,https://whyy.org/articles/feed/,whyy.org,Philadelphia PA,news,true,Regional pilot feed; validated 2026-05-09; /news/feed/ returns 403
-ABC News U.S.,https://feeds.abcnews.com/abcnews/usheadlines,feeds.abcnews.com;abcnews.go.com,National,news,false,National fallback/watchlist
-CBS News U.S.,https://www.cbsnews.com/latest/rss/us,www.cbsnews.com,National,news,false,National fallback/watchlist
-PBS NewsHour Headlines,https://www.pbs.org/newshour/feeds/rss/headlines,www.pbs.org,National,news,false,National fallback/watchlist
-PBS NewsHour Politics,https://www.pbs.org/newshour/feeds/rss/politics,www.pbs.org,National,news,false,National fallback/watchlist
+name,feed_url,allowed_domains,region,source_family,enabled,priority,expected_region,specificity_goal,notes
+LAist,https://laist.com/news.rss,laist.com,Los Angeles CA,news,true,3,Los Angeles CA,city/article-specific unrest leads,Regional pilot feed; 2026-05-09 Pi smoke classified_out only
+Texas Tribune,https://feeds.texastribune.org/feeds/main/,feeds.texastribune.org;www.texastribune.org,Texas,news,true,3,Texas,city/article-specific unrest leads,Regional pilot feed; 2026-05-09 Pi smoke classified_out only
+WHYY Philadelphia,https://whyy.org/articles/feed/,whyy.org,Philadelphia PA,news,true,3,Philadelphia PA,city/article-specific unrest leads,Regional pilot feed; validated 2026-05-09; /news/feed/ returns 403
+ABC News U.S.,https://feeds.abcnews.com/abcnews/usheadlines,feeds.abcnews.com;abcnews.go.com,National,news,false,7,National,watchlist specificity comparison,National fallback/watchlist
+CBS News U.S.,https://www.cbsnews.com/latest/rss/us,www.cbsnews.com,National,news,false,7,National,watchlist specificity comparison,National fallback/watchlist
+PBS NewsHour Headlines,https://www.pbs.org/newshour/feeds/rss/headlines,www.pbs.org,National,news,false,7,National,watchlist specificity comparison,National fallback/watchlist
+PBS NewsHour Politics,https://www.pbs.org/newshour/feeds/rss/politics,www.pbs.org,National,news,false,7,National,watchlist specificity comparison,National fallback/watchlist

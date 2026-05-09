@@ -15,10 +15,19 @@ function specificityLabel(value) {
   return value || 'SPEC'
 }
 
+function qualityLabel(value) {
+  if (value === 'article_backed_classification') return 'ARTICLE'
+  if (value === 'corroborated_classification') return 'CORROB'
+  if (value === 'detector_only') return 'DETECT'
+  if (value === 'broad_detector') return 'BROAD'
+  if (value === 'incident_specific') return 'INCIDENT'
+  return null
+}
+
 function EventRow({ event, isSelected, onSelect }) {
   const location = [event.city, event.state].filter(Boolean).join(', ')
   const displayTitle = event.display_title || event.title
-  const specificity = event.is_generic_classification ? 'CLASS' : specificityLabel(event.specificity_level)
+  const specificity = qualityLabel(event.quality_tier) || (event.is_generic_classification ? 'CLASS' : specificityLabel(event.specificity_level))
   return (
     <button
       data-id={event.id}
@@ -62,7 +71,11 @@ export default function EventFeed({ events, loadedCount = 0, total = 0, hasMore 
         {events.length === 0 && (
           <span className="event-feed__empty">No events match the current filters.</span>
         )}
-        {events.map(event => (
+        {[...events].sort((a, b) => {
+          const eligibleDelta = Number(Boolean(b.eligible_for_hotspots)) - Number(Boolean(a.eligible_for_hotspots))
+          if (eligibleDelta) return eligibleDelta
+          return new Date(b.occurred_at) - new Date(a.occurred_at)
+        }).map(event => (
           <EventRow
             key={event.id}
             event={event}

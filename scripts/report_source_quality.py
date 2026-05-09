@@ -49,6 +49,7 @@ def main():
             )
             if not run:
                 continue
+            counts = _json(run.reject_counts_json, {})
             report.append({
                 "source_name": source_name,
                 "status": run.status,
@@ -56,7 +57,21 @@ def main():
                 "records_fetched": run.records_fetched,
                 "observations_inserted": run.observations_inserted,
                 "records_rejected": run.records_rejected,
-                "reject_counts": _json(run.reject_counts_json, {}),
+                "reject_counts": counts,
+                "specificity_counts": {
+                    key.removeprefix("specificity:"): value
+                    for key, value in counts.items()
+                    if key.startswith("specificity:")
+                },
+                "quality_tier_counts": {
+                    key.removeprefix("quality:"): value
+                    for key, value in counts.items()
+                    if key.startswith("quality:")
+                },
+                "records_enriched": counts.get("records_enriched", 0),
+                "records_gated_low_specificity": counts.get("records_gated_low_specificity", 0),
+                "records_detector_only": counts.get("records_detector_only", 0),
+                "events_hotspot_eligible": counts.get("events_hotspot_eligible", 0),
                 "sample_records": _json(run.sample_records_json, []),
                 "source_breakdown": _json(run.source_breakdown_json, []),
             })

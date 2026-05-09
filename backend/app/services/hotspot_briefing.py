@@ -5,10 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.models import Event, EventSource, Hotspot
 from app.services.event_display import EventDisplay, display_for_event
+from app.services.event_quality import EventQuality, event_quality
 from app.services.intelligence import source_family
 from app.utils.time import utcnow_naive
 
 CITATION_RETURN_LIMIT = 30
+DETECTOR_CONTEXT_RADIUS_MILES = 75
+DETECTOR_CONTEXT_WINDOW_HOURS = 72
 
 
 def _pct(value: float | None) -> int:
@@ -34,6 +37,18 @@ def _avg(values: list[float]) -> float:
     if not values:
         return 0.0
     return round(sum(values) / len(values), 3)
+
+
+def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    import math
+
+    radius = 3958.8
+    lat1_r = math.radians(lat1)
+    lat2_r = math.radians(lat2)
+    dlat = lat2_r - lat1_r
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1_r) * math.cos(lat2_r) * math.sin(dlon / 2) ** 2
+    return 2 * radius * math.asin(math.sqrt(a))
 
 
 def _change_percent(current: int, previous: int) -> float | None:
@@ -138,8 +153,14 @@ def _dominant_event_types(events: list[Event], limit: int = 4) -> list[dict]:
     ]
 
 
-def _event_ref(event: Event, citation_ids_by_event: dict[int, list[int]], display_by_event: dict[int, EventDisplay]) -> dict:
+def _event_ref(
+    event: Event,
+    citation_ids_by_event: dict[int, list[int]],
+    display_by_event: dict[int, EventDisplay],
+    quality_by_event: dict[int, EventQuality],
+) -> dict:
     display = display_by_event[event.id]
+    quality = quality_by_event[event.id]
     return {
         "event_id": event.id,
         "occurred_at": event.occurred_at,
@@ -152,6 +173,9 @@ def _event_ref(event: Event, citation_ids_by_event: dict[int, list[int]], displa
         "specificity_level": display.specificity_level,
         "specificity_reason": display.specificity_reason,
         "is_generic_classification": display.is_generic_classification,
+        "quality_tier": quality.quality_tier,
+        "quality_reason": quality.quality_reason,
+        "eligible_for_hotspots": quality.eligible_for_hotspots,
         "citation_ids": citation_ids_by_event.get(event.id, [])[:3],
     }
 
@@ -160,11 +184,12 @@ def _representative_events(
     events: list[Event],
     citation_ids_by_event: dict[int, list[int]],
     display_by_event: dict[int, EventDisplay],
+    quality_by_event: dict[int, EventQuality],
     limit: int = 3,
 ) -> list[dict]:
     ranked = _representative_event_objects(events, display_by_event, limit=limit)
     return [
-        _event_ref(event, citation_ids_by_event, display_by_event)
+        _event_ref(event, citation_ids_by_event, display_by_event, quality_by_event)
         for event in ranked[:limit]
     ]
 
@@ -279,6 +304,7 @@ def _build_timeline_groups(
     now: datetime,
     citation_ids_by_event: dict[int, list[int]],
     display_by_event: dict[int, EventDisplay],
+    quality_by_event: dict[int, EventQuality],
 ) -> list[dict]:
     windows = [
         ("Last 6h", now - timedelta(hours=6), now),
@@ -295,7 +321,7 @@ def _build_timeline_groups(
         if not bucket:
             continue
         dominant = Counter(event.event_type for event in bucket).most_common(1)[0][0]
-        reps = _representative_events(bucket, citation_ids_by_event, display_by_event, limit=3)
+        reps = _representative_events(bucket, citation_ids_by_event, display_by_event, quality_by_event, limit=3)
         citation_ids = []
         for rep in reps:
             citation_ids.extend(rep["citation_ids"])
@@ -342,6 +368,8 @@ def _build_source_assessment(
     hotspot: Hotspot,
     citations: list[dict],
     citation_count_returned: int,
+    excluded_detector_count: int,
+    eligible_event_count: int,
 ) -> tuple[dict, list[str]]:
     counted = [citation for citation in citations if citation["counted"]]
     provenance_only_count = len(citations) - len(counted)
@@ -355,6 +383,8 @@ def _build_source_assessment(
         notes.append(f"{provenance_only_count} provenance-only source record{'s' if provenance_only_count != 1 else ''} retained but not counted.")
     if hotspot.confidence_score < 0.6:
         notes.append("Hotspot confidence is below 60%; review event links and location quality before treating this as firm.")
+    if excluded_detector_count:
+        notes.append("Detector activity exists nearby, but lacks incident-level source detail.")
     summary = (
         f"{len(families)} counted source famil{'ies' if len(families) != 1 else 'y'}, "
         f"{len(counted)} counted citation{'s' if len(counted) != 1 else ''}, "
@@ -369,7 +399,38 @@ def _build_source_assessment(
         "citation_count_returned": citation_count_returned,
         "citation_count_total": len(citations),
         "notes": notes,
+        "excluded_detector_count": excluded_detector_count,
+        "eligible_event_count": eligible_event_count,
+        "quality_summary": f"{eligible_event_count} hotspot-eligible events; {excluded_detector_count} nearby detector-only records excluded.",
     }, notes
+
+
+def _excluded_detector_context_count(
+    db: Session,
+    hotspot: Hotspot,
+    eligible_event_ids: set[int],
+) -> int:
+    cutoff = utcnow_naive() - timedelta(hours=DETECTOR_CONTEXT_WINDOW_HOURS)
+    candidates = (
+        db.query(Event)
+        .filter(Event.is_active == True, Event.occurred_at >= cutoff)
+        .all()
+    )
+    candidate_ids = [event.id for event in candidates]
+    sources_by_event: dict[int, list[EventSource]] = {}
+    if candidate_ids:
+        for source in db.query(EventSource).filter(EventSource.event_id.in_(candidate_ids)).all():
+            sources_by_event.setdefault(source.event_id, []).append(source)
+    count = 0
+    for event in candidates:
+        if event.id in eligible_event_ids:
+            continue
+        if _haversine_miles(hotspot.centroid_lat, hotspot.centroid_lon, event.latitude, event.longitude) > DETECTOR_CONTEXT_RADIUS_MILES:
+            continue
+        sources = sources_by_event.get(event.id, [])
+        if event_quality(event, sources).quality_tier in {"detector_only", "broad_detector"}:
+            count += 1
+    return count
 
 
 def _cap_citations(citations: list[dict], referenced_ids: set[int], limit: int = CITATION_RETURN_LIMIT) -> list[dict]:
@@ -412,13 +473,38 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
         .order_by(Event.occurred_at.desc(), Event.severity_score.desc())
         .all()
     )
+    all_events = events
+    all_grouped_sources = _source_rows(db, all_events)
+    all_display_by_event = {
+        event.id: display_for_event(event, all_grouped_sources.get(event.id, []))
+        for event in all_events
+    }
+    grouped_sources = all_grouped_sources
+    quality_by_event_all = {
+        event.id: event_quality(event, grouped_sources.get(event.id, []))
+        for event in events
+    }
+    events = [
+        event
+        for event in events
+        if quality_by_event_all[event.id].eligible_for_hotspots
+    ]
     grouped_sources = _source_rows(db, events)
     citations, citation_ids_by_event = _build_citations(events, grouped_sources)
     display_by_event = {
         event.id: display_for_event(event, grouped_sources.get(event.id, []))
         for event in events
     }
-    specificity_assessment = _build_specificity_assessment(events, display_by_event)
+    quality_by_event = {
+        event.id: event_quality(event, grouped_sources.get(event.id, []))
+        for event in events
+    }
+    excluded_detector_count = _excluded_detector_context_count(
+        db,
+        hotspot,
+        {event.id for event in events},
+    )
+    specificity_assessment = _build_specificity_assessment(all_events, all_display_by_event)
     why_now, recent_events, previous_events = _build_why_now(
         hotspot=hotspot,
         events=events,
@@ -450,6 +536,8 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
             why = f"{specificity_assessment['summary']} {why}"
     else:
         why = "No active confirmed events are currently assigned to this hotspot."
+        if specificity_assessment["low_specificity"]:
+            why = f"{specificity_assessment['summary']} {why}"
 
     key_facts = [
         {
@@ -493,6 +581,9 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
             "specificity_level": display_by_event[event.id].specificity_level,
             "specificity_reason": display_by_event[event.id].specificity_reason,
             "is_generic_classification": display_by_event[event.id].is_generic_classification,
+            "quality_tier": quality_by_event[event.id].quality_tier,
+            "quality_reason": quality_by_event[event.id].quality_reason,
+            "eligible_for_hotspots": quality_by_event[event.id].eligible_for_hotspots,
             "citation_ids": citation_ids_by_event.get(event.id, [])[:3],
         }
         for event in events[:6]
@@ -503,6 +594,7 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
         now=now,
         citation_ids_by_event=citation_ids_by_event,
         display_by_event=display_by_event,
+        quality_by_event=quality_by_event,
     )
     what_happened = {
         "summary": (
@@ -525,6 +617,8 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
         caveats.append("Hotspot confidence is below 60%, so location and event-link assumptions should be reviewed.")
     if specificity_assessment["low_specificity"]:
         caveats.insert(0, specificity_assessment["summary"])
+    if excluded_detector_count:
+        caveats.append("Detector activity exists nearby, but lacks incident-level source detail.")
 
     if top_event:
         hours = _hours_ago(top_event.occurred_at, now)
@@ -539,6 +633,8 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
         hotspot=hotspot,
         citations=citations,
         citation_count_returned=len(capped_citations),
+        excluded_detector_count=excluded_detector_count,
+        eligible_event_count=len(events),
     )
     model_packet = {
         "version": "hotspot-briefing-v2",

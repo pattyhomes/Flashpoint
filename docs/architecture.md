@@ -57,6 +57,11 @@ Intelligence services:
 
 - `services/intelligence.py` handles evidence insertion, observation insertion,
   map-signal eligibility, manual promote/dismiss/link, and safe auto-link/promote.
+- `services/event_quality.py` computes whether a record is incident-specific,
+  article-backed, corroborated, detector-only, or broad detector, and whether it
+  may affect hotspots.
+- `services/article_metadata.py` safely fetches source article metadata for
+  GDELT/local enrichment without inferring titles from URL slugs.
 - `services/ai_embeddings.py` optionally calls Ollama and must fail soft.
 
 Scoring:

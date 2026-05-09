@@ -31,6 +31,15 @@ from app.utils.time import utcnow_naive
 
 _ER_ARTICLE_ENDPOINT = "https://eventregistry.org/api/v1/article/getArticles"
 _ER_US_LOCATION_URI  = "http://en.wikipedia.org/wiki/United_States"
+KEYWORD_PACK = (
+    "protest",
+    "demonstration",
+    "riot",
+    "civil unrest",
+    "police clash",
+    "road blockade",
+    "political violence",
+)
 
 # Precision ranking (lower index = more precise)
 _PRECISION_ORDER = ["venue", "city", "state", "country"]
@@ -235,7 +244,7 @@ def _precision_passes(precision: str, min_precision: str) -> bool:
 # API request builder
 # ---------------------------------------------------------------------------
 
-def _build_request(lookback_hours: int, page: int, count: int) -> dict:
+def _build_request(lookback_hours: int, page: int, count: int, keyword: str) -> dict:
     now = utcnow_naive()
     date_start = (now - timedelta(hours=lookback_hours)).strftime("%Y-%m-%d")
     date_end = now.strftime("%Y-%m-%d")
@@ -246,7 +255,7 @@ def _build_request(lookback_hours: int, page: int, count: int) -> dict:
         # Boolean OR queries are not supported on the free subscription tier —
         # they silently return 0 results. Use a single high-recall keyword instead;
         # the classifier provides the event-type gate downstream.
-        "keyword": "protest",
+        "keyword": keyword,
         "keywordsLoc": "title,body",
         "locationUri": _ER_US_LOCATION_URI,
         "lang": "eng",
@@ -380,54 +389,76 @@ class EventRegistrySource:
         page_size   = min(100, max_records)
 
         results: list[tuple[EventCreate, dict]] = []
-        page = 1
-        total_fetched = 0
+        seen: set[str] = set()
+        self.stats = {"query_breakdown": [], "duplicates": 0, "records_fetched": 0}
 
-        while total_fetched < max_records:
-            fetch_count = min(page_size, max_records - total_fetched)
-            payload = _build_request(lookback, page, fetch_count)
+        for keyword in KEYWORD_PACK:
+            page = 1
+            total_fetched = 0
+            accepted_for_keyword = 0
+            while len(results) < max_records and total_fetched < max_records:
+                fetch_count = min(page_size, max_records - total_fetched)
+                payload = _build_request(lookback, page, fetch_count, keyword)
 
-            try:
-                resp = httpx.post(
-                    _ER_ARTICLE_ENDPOINT,
-                    json=payload,
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-            except Exception as e:
-                print(f"[eventregistry] Fetch error (page {page}): {e}")
-                break
-
-            # ER returns HTTP 200 with {"error": "..."} for API-level errors
-            if "error" in data:
-                print(f"[eventregistry] API error: {data['error']}")
-                break
-
-            articles_block = data.get("articles", {})
-            articles = articles_block.get("results", [])
-            total_results = articles_block.get("totalResults", 0)
-
-            if not articles:
-                break
-
-            for article in articles:
                 try:
-                    normalized = _normalize_article(article)
-                    if normalized is not None:
-                        results.append(normalized)
+                    resp = httpx.post(
+                        _ER_ARTICLE_ENDPOINT,
+                        json=payload,
+                        timeout=30,
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
                 except Exception as e:
-                    print(f"[eventregistry] Normalization error for '{article.get('uri', '?')}': {e}")
+                    print(f"[eventregistry] Fetch error ({keyword}, page {page}): {e}")
+                    break
 
-            total_fetched += len(articles)
-            page += 1
+                # ER returns HTTP 200 with {"error": "..."} for API-level errors
+                if "error" in data:
+                    print(f"[eventregistry] API error ({keyword}): {data['error']}")
+                    break
 
-            # Stop if we've exhausted all available results
-            if total_fetched >= total_results:
+                articles_block = data.get("articles", {})
+                articles = articles_block.get("results", [])
+                total_results = articles_block.get("totalResults", 0)
+
+                if not articles:
+                    break
+
+                for article in articles:
+                    dedupe_key = (article.get("uri") or article.get("url") or "").strip()
+                    if dedupe_key and dedupe_key in seen:
+                        self.stats["duplicates"] += 1
+                        continue
+                    if dedupe_key:
+                        seen.add(dedupe_key)
+                    try:
+                        normalized = _normalize_article(article)
+                        if normalized is not None:
+                            results.append(normalized)
+                            accepted_for_keyword += 1
+                    except Exception as e:
+                        print(f"[eventregistry] Normalization error for '{article.get('uri', '?')}': {e}")
+                    if len(results) >= max_records:
+                        break
+
+                total_fetched += len(articles)
+                self.stats["records_fetched"] += len(articles)
+                page += 1
+
+                if total_fetched >= total_results:
+                    break
+            self.stats["query_breakdown"].append({
+                "source_name": keyword,
+                "keyword": keyword,
+                "records_fetched": total_fetched,
+                "observations_inserted": accepted_for_keyword,
+                "records_rejected": max(0, total_fetched - accepted_for_keyword),
+            })
+            if len(results) >= max_records:
                 break
 
         print(
-            f"[eventregistry] Fetched {total_fetched} articles, "
+            f"[eventregistry] Fetched {self.stats['records_fetched']} articles, "
             f"{len(results)} passed classification/location filters."
         )
         return results

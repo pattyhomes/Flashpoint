@@ -56,6 +56,11 @@ _PHRASE_PATTERNS: list[tuple[str, str, float]] = [
     ("bridge shutdown",             "protest_related_road_shutdown", 0.75),
     ("road blockade",               "protest_related_road_shutdown", 0.75),
     ("interstate blocked",          "protest_related_road_shutdown", 0.80),
+    ("blocked traffic",             "protest_related_road_shutdown", 0.75),
+    ("clash with officers",         "police_clash",                0.82),
+    ("campus protest",              "protest",                     0.72),
+    ("counterprotest",              "protest",                     0.72),
+    ("counter protest",             "protest",                     0.72),
     ("property damage",             "vandalism_tied_to_unrest",    0.60),  # needs context
     ("storefronts smashed",         "vandalism_tied_to_unrest",    0.80),
     ("windows smashed",             "vandalism_tied_to_unrest",    0.75),
@@ -68,6 +73,9 @@ _PHRASE_PATTERNS: list[tuple[str, str, float]] = [
     ("mob",                         "crowd_disruption",            0.65),
     ("rally against",               "protest",                     0.70),
     ("march against",               "protest",                     0.70),
+    ("student walkout",             "protest",                     0.70),
+    ("workers walked out",          "protest",                     0.68),
+    ("protest encampment",          "protest",                     0.72),
 ]
 
 # Single-word tokens (matched against lowercased word set, not substring)
@@ -91,6 +99,9 @@ _TOKEN_MAP: list[tuple[str, str, float]] = [
     ("stampede",         "crowd_disruption", 0.70),
     ("baton",            "police_clash",    0.65),
     ("unrest",           "unrest",          0.55),
+    ("walkout",          "protest",         0.60),
+    ("occupation",       "protest",         0.58),
+    ("encampment",       "protest",         0.60),
 ]
 
 # ---------------------------------------------------------------------------

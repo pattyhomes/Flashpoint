@@ -77,6 +77,8 @@ def _source_payload(source_name: str, last_run: IngestRun | None, last_success: 
         status = last_run.status
     if stale and status == "success":
         status = "stale"
+    metrics = _quality_metrics(last_run.reject_counts_json if last_run else None)
+    events_created = last_run.events_inserted if last_run else 0
     return {
         "source_name": source_name,
         "status": status,
@@ -88,8 +90,10 @@ def _source_payload(source_name: str, last_run: IngestRun | None, last_success: 
         "observations_inserted": last_run.observations_inserted if last_run else 0,
         "records_rejected": last_run.records_rejected if last_run else 0,
         "reject_counts": _json_dict(last_run.reject_counts_json if last_run else None),
+        **metrics,
+        "events_created": events_created,
         "sample_records": _json_list(last_run.sample_records_json if last_run else None),
-        "source_breakdown": _json_list(last_run.source_breakdown_json if last_run else None),
+        "source_breakdown": [_breakdown_payload(item) for item in _json_list(last_run.source_breakdown_json if last_run else None)],
         "runnable": source_name in RUNNABLE_OBSERVATION_SOURCES,
         "stale": stale,
     }
@@ -131,6 +135,7 @@ def run_source_now(source_name: str):
 
 
 def _run_payload(run: IngestRun) -> dict:
+    metrics = _quality_metrics(run.reject_counts_json)
     return {
         "id": run.id,
         "source_name": run.ingest_source,
@@ -143,9 +148,20 @@ def _run_payload(run: IngestRun) -> dict:
         "observations_inserted": run.observations_inserted,
         "records_rejected": run.records_rejected,
         "reject_counts": _json_dict(run.reject_counts_json),
+        **metrics,
+        "events_created": run.events_inserted,
         "sample_records": _json_list(run.sample_records_json),
-        "source_breakdown": _json_list(run.source_breakdown_json),
+        "source_breakdown": [_breakdown_payload(item) for item in _json_list(run.source_breakdown_json)],
         "error_message": run.error_message,
+    }
+
+
+def _breakdown_payload(item: dict) -> dict:
+    reject_counts = item.get("reject_counts") if isinstance(item.get("reject_counts"), dict) else {}
+    return {
+        **item,
+        **_quality_metrics(json.dumps(reject_counts, sort_keys=True, separators=(",", ":"))),
+        "events_created": item.get("events_inserted", item.get("events_created", 0)),
     }
 
 
@@ -183,6 +199,26 @@ def _json_dict(value: str | None) -> dict[str, int]:
     if not isinstance(parsed, dict):
         return {}
     return {str(key): int(val) for key, val in parsed.items() if isinstance(val, int)}
+
+
+def _quality_metrics(value: str | None) -> dict:
+    counts = _json_dict(value)
+    return {
+        "specificity_counts": {
+            key.removeprefix("specificity:"): count
+            for key, count in counts.items()
+            if key.startswith("specificity:")
+        },
+        "quality_tier_counts": {
+            key.removeprefix("quality:"): count
+            for key, count in counts.items()
+            if key.startswith("quality:")
+        },
+        "records_enriched": counts.get("records_enriched", 0),
+        "records_gated_low_specificity": counts.get("records_gated_low_specificity", 0),
+        "records_detector_only": counts.get("records_detector_only", 0),
+        "events_hotspot_eligible": counts.get("events_hotspot_eligible", 0),
+    }
 
 
 def _json_list(value: str | None) -> list[dict]:

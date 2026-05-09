@@ -10,6 +10,7 @@ from app.config import settings
 from app.models import Event, EventSource, EvidenceItem, Observation
 from app.services.ingestion.deduper import find_matching_event
 from app.services.ai_embeddings import embed_text
+from app.services.event_quality import observation_quality
 from app.utils.time import utcnow_naive as utcnow
 
 SIGNAL_CONFIDENCE_MIN = 0.45
@@ -632,6 +633,14 @@ def apply_observation_automation(db: Session, observation: Observation) -> Event
 
     matching_observations = _matching_lead_observations(db, observation)
     if not matching_observations:
+        quality = observation_quality(observation, source_type=evidence.source_type, trust_tier=evidence.trust_tier)
+        if family == "news" and quality.eligible_for_auto_promotion:
+            return promote_observation(db, observation.id)
+        if not quality.eligible_for_auto_promotion:
+            observation.exception_category = observation.exception_category or quality.quality_tier
+            observation.exception_detail = observation.exception_detail or quality.quality_reason
+            observation.updated_at = utcnow()
+            db.flush()
         return None
 
     family_by_observation = {

@@ -14,6 +14,9 @@ class RssFeed:
     region: str
     source_family: str
     enabled: bool
+    priority: int = 5
+    expected_region: str = ""
+    specificity_goal: str = ""
     notes: str = ""
 
 
@@ -33,6 +36,9 @@ def load_feed_registry(path: Path | None = None, *, enabled_only: bool = False) 
                 region=(row.get("region") or "").strip(),
                 source_family=(row.get("source_family") or "news").strip(),
                 enabled=(row.get("enabled") or "").strip().lower() in {"1", "true", "yes", "on"},
+                priority=int((row.get("priority") or "5").strip() or "5"),
+                expected_region=(row.get("expected_region") or row.get("region") or "").strip(),
+                specificity_goal=(row.get("specificity_goal") or "").strip(),
                 notes=(row.get("notes") or "").strip(),
             )
             if enabled_only and not feed.enabled:

@@ -12,6 +12,15 @@ function specificityLabel(value) {
   return value || 'SPEC'
 }
 
+function qualityLabel(value) {
+  if (value === 'article_backed_classification') return 'ARTICLE BACKED'
+  if (value === 'corroborated_classification') return 'CORROBORATED'
+  if (value === 'detector_only') return 'DETECTOR ONLY'
+  if (value === 'broad_detector') return 'BROAD DETECTOR'
+  if (value === 'incident_specific') return 'INCIDENT'
+  return value || 'QUALITY'
+}
+
 function severityColor(score) {
   if (score >= 0.8) return '#ff3a2e'
   if (score >= 0.6) return '#ff7a18'
@@ -168,7 +177,7 @@ function WhatHappenedSection({ whatHappened, citationsById }) {
               <div key={event.event_id} className="briefing-group-event">
                 <span>{relativeTime(event.occurred_at)}</span>
                 <b>{event.display_title || event.title}</b>
-                {event.is_generic_classification && <em>{specificityLabel(event.specificity_level)}</em>}
+                <em>{qualityLabel(event.quality_tier) || (event.is_generic_classification ? specificityLabel(event.specificity_level) : event.event_type)}</em>
                 <CitationRefs ids={event.citation_ids} citationsById={citationsById} />
               </div>
             ))}
@@ -191,6 +200,8 @@ function SourceReadSection({ sourceAssessment }) {
       <div className="briefing-source-strip">
         <span><b>COUNTED</b>{sourceAssessment.counted_source_count}</span>
         <span><b>PROV</b>{sourceAssessment.provenance_only_count}</span>
+        <span><b>ELIGIBLE</b>{sourceAssessment.eligible_event_count || 0}</span>
+        <span><b>EXCL</b>{sourceAssessment.excluded_detector_count || 0}</span>
         <span><b>FAMILIES</b>{(sourceAssessment.counted_source_families || []).join(', ') || 'none'}</span>
       </div>
       <div className="briefing-source-notes">
@@ -288,6 +299,8 @@ function EventDetail({ event, detail, detailLoading, signals }) {
   const displayTitle = enriched.display_title || event.display_title || event.title
   const specificityReason = enriched.specificity_reason || event.specificity_reason
   const specificityLevel = enriched.specificity_level || event.specificity_level
+  const qualityTier = enriched.quality_tier || event.quality_tier
+  const qualityReason = enriched.quality_reason || event.quality_reason
   return (
     <div className="detail-body">
       <div className="detail-kicker">EVENT · {event.source_name}</div>
@@ -302,6 +315,12 @@ function EventDetail({ event, detail, detailLoading, signals }) {
         <div className={`specificity-note specificity-note--${specificityLevel || 'specific'}`}>
           <b>{specificityLabel(specificityLevel)}</b>
           <span>{specificityReason}</span>
+        </div>
+      )}
+      {qualityReason && (
+        <div className={`specificity-note specificity-note--${qualityTier || 'quality'}`}>
+          <b>{qualityLabel(qualityTier)}</b>
+          <span>{qualityReason}</span>
         </div>
       )}
       <ScoreGrid scores={[
@@ -356,7 +375,7 @@ function HotspotDetail({ hotspot, memberEvents = [], loading, briefing, briefing
         ) : memberEvents.slice(0, 10).map(event => (
           <div key={event.id} className="member-event-row">
             <i style={{ background: severityColor(event.severity_score) }} />
-            <span>{event.is_generic_classification ? 'CLASS' : specificityLabel(event.specificity_level) || event.event_type}</span>
+            <span>{qualityLabel(event.quality_tier) || (event.is_generic_classification ? 'CLASS' : specificityLabel(event.specificity_level) || event.event_type)}</span>
             <b>{event.display_title || event.title}</b>
             <em>{relativeTime(event.occurred_at)}</em>
           </div>

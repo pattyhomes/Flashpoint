@@ -20,6 +20,36 @@ function ratioParts(fetched, accepted, rejected) {
   }
 }
 
+function qualityParts(source) {
+  const fetched = Number(source.records_fetched) || 0
+  const enriched = Number(source.records_enriched) || 0
+  const eligible = Number(source.events_hotspot_eligible) || 0
+  const gated = (Number(source.records_gated_low_specificity) || 0) + (Number(source.records_detector_only) || 0)
+  const total = Math.max(fetched, enriched + eligible + gated, 1)
+  return {
+    enriched: Math.max(0, Math.min(100, (enriched / total) * 100)),
+    eligible: Math.max(0, Math.min(100, (eligible / total) * 100)),
+    gated: Math.max(0, Math.min(100, (gated / total) * 100)),
+  }
+}
+
+function SourceQualityBar({ source, label }) {
+  const parts = qualityParts(source)
+  const remainder = Math.max(0, 100 - parts.enriched - parts.eligible - parts.gated)
+  return (
+    <span
+      className="source-quality-bar"
+      aria-label={`${label}: ${formatCount(source.records_enriched)} enriched, ${formatCount(source.events_hotspot_eligible)} eligible, ${formatCount(source.records_detector_only)} detector-only`}
+      title={`${formatCount(source.records_enriched)} enriched / ${formatCount(source.events_hotspot_eligible)} eligible / ${formatCount(source.records_detector_only)} detector-only`}
+    >
+      <i className="source-quality-bar__eligible" style={{ width: `${parts.eligible}%` }} />
+      <i className="source-quality-bar__enriched" style={{ width: `${parts.enriched}%` }} />
+      <i className="source-quality-bar__gated" style={{ width: `${parts.gated}%` }} />
+      {remainder > 0 && <i className="source-quality-bar__remainder" style={{ width: `${remainder}%` }} />}
+    </span>
+  )
+}
+
 function SourceRatioBar({ fetched, accepted, rejected, label }) {
   const parts = ratioParts(fetched, accepted, rejected)
   const acceptedWidth = parts.accepted
@@ -75,6 +105,7 @@ function SourceHealth({ sourceStatus, systemStatus, sourceRunBusy, onRunSource }
           const topReject = rejectEntries[0]
           const samples = source.sample_records || []
           const breakdown = source.source_breakdown || []
+          const topQuality = Object.entries(source.quality_tier_counts || {}).sort((a, b) => b[1] - a[1])[0]
 
           return (
             <div
@@ -88,8 +119,12 @@ function SourceHealth({ sourceStatus, systemStatus, sourceRunBusy, onRunSource }
                 </div>
                 <div className="source-row__quality">
                   <span>{acceptanceRate}% accepted</span>
+                  <span>{formatCount(source.events_hotspot_eligible)} eligible</span>
+                  <span>{formatCount(source.records_enriched)} enriched</span>
+                  {topQuality && <span>{labelize(topQuality[0])}: {formatCount(topQuality[1])}</span>}
                   {topReject && <span>{labelize(topReject[0])}: {formatCount(topReject[1])}</span>}
                 </div>
+                <SourceQualityBar source={source} label={source.source_name || 'source'} />
                 {source.runnable && (
                   <button
                     type="button"
@@ -124,6 +159,7 @@ function SourceHealth({ sourceStatus, systemStatus, sourceRunBusy, onRunSource }
                           rejected={feed.records_rejected}
                           label={feed.source_name || 'Feed'}
                         />
+                        <SourceQualityBar source={feed} label={feed.source_name || 'Feed'} />
                       </div>
                     ))}
                   </div>
@@ -163,6 +199,7 @@ function SourceRuns({ runs, loading }) {
                 rejected={run.records_rejected}
                 label={run.source_name || 'source run'}
               />
+              <SourceQualityBar source={run} label={run.source_name || 'source run'} />
             </div>
             <dl>
               <dt>F</dt><dd>{formatCount(run.records_fetched)}</dd>

@@ -15,6 +15,8 @@ from app.services.intelligence import (
     record_evidence,
     record_observation,
 )
+from app.services.article_metadata import fetch_article_metadata, is_specific_unrest_metadata
+from app.services.event_quality import event_quality, observation_quality
 from app.services.scoring.hotspot import compute_hotspots
 from app.utils.time import utcnow_naive as utcnow
 
@@ -100,43 +102,53 @@ def run_gdelt_ingestion():
         before_observation_count = db.query(Observation).count()
         inserted = 0
         rejected = 0
+        enriched = 0
+        gated_low_specificity = 0
+        detector_only = 0
+        hotspot_eligible = 0
+        quality_counts: dict[str, int] = {}
         for event_schema in events:
             if event_schema.source_id and is_duplicate(event_schema.source_id, db):
                 rejected += 1
                 continue
+            metadata = fetch_article_metadata(event_schema.source_url)
+            article_specific = is_specific_unrest_metadata(metadata)
+            if article_specific:
+                enriched += 1
+            raw_payload = {}
+            try:
+                raw_payload = json.loads(event_schema.raw_payload_json or "{}")
+            except json.JSONDecodeError:
+                raw_payload = {}
+            raw_payload["article_metadata"] = {
+                "title": metadata.title,
+                "excerpt": metadata.excerpt,
+                "final_url": metadata.final_url,
+                "reason": metadata.reason,
+            }
+            raw_payload_json = json.dumps(raw_payload, sort_keys=True, separators=(",", ":"))
             evidence = record_evidence(
                 db,
                 source_type="gdelt",
                 source_record_id=event_schema.source_id,
                 source_url=event_schema.source_url,
                 source_name="GDELT",
-                source_title=event_schema.title,
-                excerpt=event_schema.summary,
+                source_title=metadata.title or event_schema.title,
+                excerpt=metadata.excerpt or event_schema.summary,
                 published_at=event_schema.occurred_at,
                 trust_tier="news",
-                raw_payload_json=event_schema.raw_payload_json,
+                raw_payload_json=raw_payload_json,
             )
-            new_event = Event(**event_schema.model_dump())
-            db.add(new_event)
-            db.flush()
-            db.add(EventSource(
-                event_id=new_event.id,
-                source_type="gdelt",
-                source_record_id=event_schema.source_id,
-                source_name="GDELT",
-                source_url=event_schema.source_url,
-                source_title=event_schema.title,
-                source_published_at=event_schema.occurred_at,
-                source_trust_weight=1.0,
-                location_precision=event_schema.location_precision,
-                metadata_json=event_schema.raw_payload_json,
-            ))
+            if article_specific and (not evidence.source_title or evidence.source_title == event_schema.title):
+                evidence.source_title = metadata.title
+                evidence.excerpt = metadata.excerpt or evidence.excerpt
+                evidence.raw_payload_json = raw_payload_json
             observation = record_observation(
                 db,
                 evidence=evidence,
-                status="promoted",
+                status="lead",
                 title=event_schema.title,
-                summary=event_schema.summary,
+                summary=metadata.excerpt or event_schema.summary,
                 candidate_event_type=event_schema.event_type,
                 latitude=event_schema.latitude,
                 longitude=event_schema.longitude,
@@ -148,6 +160,47 @@ def run_gdelt_ingestion():
                 severity_score=event_schema.severity_score,
                 location_precision=event_schema.location_precision,
             )
+            broad_precision = (event_schema.location_precision or "").lower() in {"state", "country", "area"}
+            if not article_specific or broad_precision:
+                detector_only += 1
+                tier = "broad_detector" if broad_precision else "detector_only"
+                observation.exception_category = tier
+                observation.exception_detail = (
+                    "Broad detector classification lacks incident-level source detail."
+                    if broad_precision
+                    else "GDELT detector record lacks a specific article title or independent corroboration."
+                )
+                quality_counts[f"quality:{tier}"] = quality_counts.get(f"quality:{tier}", 0) + 1
+                specificity_key = "specificity:low_location" if broad_precision else "specificity:classified"
+                quality_counts[specificity_key] = quality_counts.get(specificity_key, 0) + 1
+                if broad_precision:
+                    gated_low_specificity += 1
+                continue
+
+            event_data = event_schema.model_dump()
+            event_data["summary"] = metadata.excerpt or event_schema.summary
+            event_data["raw_payload_json"] = raw_payload_json
+            new_event = Event(**event_data)
+            db.add(new_event)
+            db.flush()
+            db.add(EventSource(
+                event_id=new_event.id,
+                source_type="article",
+                source_record_id=event_schema.source_id,
+                source_name="GDELT source article",
+                source_url=metadata.final_url or event_schema.source_url,
+                source_title=metadata.title,
+                source_published_at=event_schema.occurred_at,
+                source_trust_weight=1.0,
+                location_precision=event_schema.location_precision,
+                metadata_json=raw_payload_json,
+            ))
+            quality = event_quality(new_event, db.query(EventSource).filter(EventSource.event_id == new_event.id).all())
+            quality_counts[f"quality:{quality.quality_tier}"] = quality_counts.get(f"quality:{quality.quality_tier}", 0) + 1
+            quality_counts["specificity:specific"] = quality_counts.get("specificity:specific", 0) + 1
+            if quality.eligible_for_hotspots:
+                hotspot_eligible += 1
+            observation.status = "promoted"
             observation.promoted_event_id = new_event.id
             observation.linked_event_id = new_event.id
             inserted += 1
@@ -159,8 +212,16 @@ def run_gdelt_ingestion():
         run.records_fetched = len(events)
         run.evidence_inserted = db.query(EvidenceItem).count() - before_evidence_count
         run.observations_inserted = db.query(Observation).count() - before_observation_count
-        run.records_rejected = rejected
-        run.reject_counts_json = json.dumps({"duplicate": rejected}, sort_keys=True, separators=(",", ":")) if rejected else "{}"
+        run.records_rejected = rejected + detector_only
+        run.reject_counts_json = json.dumps({
+            **({"duplicate": rejected} if rejected else {}),
+            "records_enriched": enriched,
+            "records_gated_low_specificity": gated_low_specificity,
+            "records_detector_only": detector_only,
+            "records_promoted": inserted,
+            "events_hotspot_eligible": hotspot_eligible,
+            **quality_counts,
+        }, sort_keys=True, separators=(",", ":"))
         db.commit()
         print(f"[gdelt] Inserted {inserted} new events.")
         compute_hotspots(db)
@@ -218,6 +279,8 @@ def run_eventregistry_ingestion():
         syndicated = 0        # copies stored but not counted
         rejected = 0
         reject_counts: dict[str, int] = {}
+        hotspot_eligible = 0
+        quality_counts: dict[str, int] = {}
         new_events_this_run = 0
 
         for event_schema, raw_article in article_pairs:
@@ -324,45 +387,47 @@ def run_eventregistry_ingestion():
 
             else:
                 # --- Discovery path ---
+                preview_observation_kwargs = dict(
+                    evidence=evidence,
+                    status="lead",
+                    title=event_schema.title,
+                    summary=event_schema.summary,
+                    candidate_event_type=event_schema.event_type,
+                    latitude=event_schema.latitude,
+                    longitude=event_schema.longitude,
+                    city=event_schema.city,
+                    state=event_schema.state,
+                    country=event_schema.country,
+                    observed_at=event_schema.occurred_at,
+                    confidence_score=event_schema.confidence_score,
+                    severity_score=event_schema.severity_score,
+                    location_precision=event_schema.location_precision,
+                )
                 if not settings.event_registry_create_new_events:
                     observation = record_observation(
                         db,
-                        evidence=evidence,
-                        status="lead",
-                        title=event_schema.title,
-                        summary=event_schema.summary,
-                        candidate_event_type=event_schema.event_type,
-                        latitude=event_schema.latitude,
-                        longitude=event_schema.longitude,
-                        city=event_schema.city,
-                        state=event_schema.state,
-                        country=event_schema.country,
-                        observed_at=event_schema.occurred_at,
-                        confidence_score=event_schema.confidence_score,
-                        severity_score=event_schema.severity_score,
-                        location_precision=event_schema.location_precision,
+                        **preview_observation_kwargs,
                     )
-                    apply_observation_automation(db, observation)
+                    continue
+                probe = type("ObservationPreview", (), {
+                    "title": event_schema.title,
+                    "location_precision": event_schema.location_precision,
+                })()
+                oq = observation_quality(probe, source_type="eventregistry", trust_tier="news")
+                if not oq.eligible_for_auto_promotion:
+                    observation = record_observation(db, **preview_observation_kwargs)
+                    observation.exception_category = oq.quality_tier
+                    observation.exception_detail = oq.quality_reason
+                    rejected += 1
+                    reject_counts["records_gated_low_specificity"] = reject_counts.get("records_gated_low_specificity", 0) + 1
+                    reject_counts[f"quality:{oq.quality_tier}"] = reject_counts.get(f"quality:{oq.quality_tier}", 0) + 1
+                    reject_counts["specificity:low_location"] = reject_counts.get("specificity:low_location", 0) + 1
                     continue
                 if new_events_this_run >= settings.event_registry_max_new_events_per_run:
                     observation = record_observation(
                         db,
-                        evidence=evidence,
-                        status="lead",
-                        title=event_schema.title,
-                        summary=event_schema.summary,
-                        candidate_event_type=event_schema.event_type,
-                        latitude=event_schema.latitude,
-                        longitude=event_schema.longitude,
-                        city=event_schema.city,
-                        state=event_schema.state,
-                        country=event_schema.country,
-                        observed_at=event_schema.occurred_at,
-                        confidence_score=event_schema.confidence_score,
-                        severity_score=event_schema.severity_score,
-                        location_precision=event_schema.location_precision,
+                        **preview_observation_kwargs,
                     )
-                    apply_observation_automation(db, observation)
                     continue
 
                 # Apply tiered uncorroborated confidence cap
@@ -411,6 +476,11 @@ def run_eventregistry_ingestion():
                 )
                 observation.promoted_event_id = new_event.id
                 observation.linked_event_id = new_event.id
+                quality = event_quality(new_event, [source for source in db.query(EventSource).filter(EventSource.event_id == new_event.id).all()])
+                quality_counts[f"quality:{quality.quality_tier}"] = quality_counts.get(f"quality:{quality.quality_tier}", 0) + 1
+                quality_counts["specificity:specific"] = quality_counts.get("specificity:specific", 0) + 1
+                if quality.eligible_for_hotspots:
+                    hotspot_eligible += 1
 
                 inserted += 1
                 new_events_this_run += 1
@@ -429,7 +499,12 @@ def run_eventregistry_ingestion():
         run.evidence_inserted = db.query(EvidenceItem).count() - before_evidence_count
         run.observations_inserted = db.query(Observation).count() - before_observation_count
         run.records_rejected = rejected
-        run.reject_counts_json = json.dumps(reject_counts, sort_keys=True, separators=(",", ":"))
+        run.reject_counts_json = json.dumps({
+            **reject_counts,
+            "events_hotspot_eligible": hotspot_eligible,
+            **quality_counts,
+        }, sort_keys=True, separators=(",", ":"))
+        run.source_breakdown_json = json.dumps(getattr(source, "stats", {}).get("query_breakdown", []), sort_keys=True, separators=(",", ":"))
         db.commit()
 
         print(

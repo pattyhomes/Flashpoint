@@ -138,6 +138,8 @@ def display_for_event(event: Event, sources: list[EventSource] | None = None) ->
 
 def serialize_event(event: Event, sources: list[EventSource] | None = None) -> dict:
     display = display_for_event(event, sources)
+    from app.services.event_quality import event_quality
+    quality = event_quality(event, sources)
     return {
         "id": event.id,
         "external_id": event.external_id,
@@ -162,4 +164,5 @@ def serialize_event(event: Event, sources: list[EventSource] | None = None) -> d
         "is_active": event.is_active,
         "location_precision": event.location_precision,
         **display.as_dict(),
+        **quality.as_dict(),
     }

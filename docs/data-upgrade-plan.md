@@ -167,13 +167,24 @@ of concrete incidents, while real article/source titles are preferred when they
 are specific. This display contract is shared across briefing, event detail,
 member events, and the incident feed; scoring remains unchanged.
 
+The next data-quality shove changes the confirmed layer policy: GDELT is now a
+detector-first source. It still records evidence and observations, but broad
+state/country detector records no longer create confirmed events or drive
+hotspots by themselves. City/venue GDELT records must be article-backed by a
+safe fetched source title, or later corroborated, before they become
+hotspot-eligible. Event Registry and local RSS are the near-term
+article-specific backbone; Mac Mini/Ollama generation remains future Stage 3 and
+the Pi remains display-only.
+
 ## Recommended Next Sprint
 
 After Stage 1.5 operational rollout:
 
-1. Run `nws` and `local_news` from the Sources rail after deploy, then inspect
-   recent run history and source samples.
-2. Add or remove regional RSS feeds based on source quality samples, not just
+1. Run GDELT/Event Registry/local news after deploy and inspect enriched,
+   detector-only, gated, and hotspot-eligible counts in the Sources rail.
+2. Run `scripts/backfill_event_specificity.py --dry-run --limit 100` before any
+   apply-mode cleanup of recent low-specificity GDELT history.
+3. Add or remove regional RSS feeds based on source quality samples, not just
    aggregate rejection counts.
-3. Expand eval fixtures with real false positives from the Pi source samples.
-4. Decide whether Bluesky should be enabled as a weak signal source.
+4. Expand eval fixtures with real false positives from the Pi source samples.
+5. Decide whether Bluesky should be enabled as a weak signal source.

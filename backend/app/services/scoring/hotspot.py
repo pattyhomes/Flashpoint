@@ -18,7 +18,8 @@ from app.utils.time import utcnow_naive
 
 from sqlalchemy.orm import Session
 
-from app.models import Event, Hotspot
+from app.models import Event, EventSource, Hotspot
+from app.services.event_quality import event_quality
 
 CLUSTER_RADIUS_MILES = 75    # metro-region radius — events within this distance merge
 CLUSTER_WINDOW_HOURS = 72   # only events within this lookback window form hotspots
@@ -278,6 +279,17 @@ def compute_hotspots(db: Session) -> None:
         Event.is_active == True,
         Event.occurred_at >= cluster_cutoff,
     ).all()
+    if events:
+        event_ids = [event.id for event in events]
+        source_rows = db.query(EventSource).filter(EventSource.event_id.in_(event_ids)).all()
+        sources_by_event: dict[int, list[EventSource]] = defaultdict(list)
+        for source in source_rows:
+            sources_by_event[source.event_id].append(source)
+        events = [
+            event
+            for event in events
+            if event_quality(event, sources_by_event.get(event.id, [])).eligible_for_hotspots
+        ]
     if not events:
         db.query(Hotspot).delete()
         db.commit()

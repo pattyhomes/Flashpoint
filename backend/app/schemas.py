@@ -62,6 +62,10 @@ class EventOut(BaseModel):
     specificity_level: str
     specificity_reason: str
     is_generic_classification: bool
+    quality_tier: str
+    quality_reason: str
+    eligible_for_hotspots: bool
+    eligible_for_auto_promotion: bool
 
     model_config = {"from_attributes": True}
 
@@ -199,6 +203,9 @@ class HotspotBriefingTimelineItem(BaseModel):
     specificity_level: str
     specificity_reason: str
     is_generic_classification: bool
+    quality_tier: str | None = None
+    quality_reason: str | None = None
+    eligible_for_hotspots: bool | None = None
     citation_ids: list[int] = Field(default_factory=list)
 
 
@@ -248,6 +255,9 @@ class HotspotBriefingEventRef(BaseModel):
     specificity_level: str
     specificity_reason: str
     is_generic_classification: bool
+    quality_tier: str | None = None
+    quality_reason: str | None = None
+    eligible_for_hotspots: bool | None = None
     citation_ids: list[int] = Field(default_factory=list)
 
 
@@ -279,6 +289,9 @@ class HotspotBriefingSourceAssessment(BaseModel):
     citation_count_returned: int
     citation_count_total: int
     notes: list[str] = Field(default_factory=list)
+    excluded_detector_count: int = 0
+    eligible_event_count: int = 0
+    quality_summary: str | None = None
 
 
 class HotspotSpecificityAssessment(BaseModel):
@@ -349,6 +362,13 @@ class SourceBreakdownOut(BaseModel):
     observations_inserted: int = 0
     records_rejected: int = 0
     reject_counts: dict[str, int] = {}
+    specificity_counts: dict[str, int] = {}
+    quality_tier_counts: dict[str, int] = {}
+    records_enriched: int = 0
+    records_gated_low_specificity: int = 0
+    records_detector_only: int = 0
+    events_created: int = 0
+    events_hotspot_eligible: int = 0
     sample_records: list[SourceSampleOut] = []
 
 
@@ -363,6 +383,13 @@ class SourceStatusOut(BaseModel):
     observations_inserted: int
     records_rejected: int
     reject_counts: dict[str, int]
+    specificity_counts: dict[str, int] = {}
+    quality_tier_counts: dict[str, int] = {}
+    records_enriched: int = 0
+    records_gated_low_specificity: int = 0
+    records_detector_only: int = 0
+    events_created: int = 0
+    events_hotspot_eligible: int = 0
     sample_records: list[SourceSampleOut] = []
     source_breakdown: list[SourceBreakdownOut] = []
     runnable: bool = False
@@ -387,6 +414,13 @@ class SourceRunOut(BaseModel):
     observations_inserted: int
     records_rejected: int
     reject_counts: dict[str, int] = {}
+    specificity_counts: dict[str, int] = {}
+    quality_tier_counts: dict[str, int] = {}
+    records_enriched: int = 0
+    records_gated_low_specificity: int = 0
+    records_detector_only: int = 0
+    events_created: int = 0
+    events_hotspot_eligible: int = 0
     sample_records: list[SourceSampleOut] = []
     source_breakdown: list[SourceBreakdownOut] = []
     error_message: str | None = None

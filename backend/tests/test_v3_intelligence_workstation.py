@@ -69,6 +69,25 @@ def _event(**overrides):
     return Event(**values)
 
 
+def _hotspot(**overrides):
+    values = {
+        "id": 1,
+        "name": "Philadelphia Metro",
+        "centroid_lat": 39.9526,
+        "centroid_lon": -75.1652,
+        "event_count": 2,
+        "confidence_score": 0.7,
+        "severity_score": 0.6,
+        "momentum_score": 0.5,
+        "priority_score": 0.62,
+        "trend_state": "stable",
+        "status_label": "Active Hotspot",
+        "last_computed_at": datetime(2026, 5, 7, 13, 0, 0),
+    }
+    values.update(overrides)
+    return Hotspot(**values)
+
+
 def _lead(db, *, source_type="bluesky", record_id="lead-1", trust_tier="weak", confidence=0.5, status="lead"):
     evidence = record_evidence(
         db,
@@ -282,6 +301,160 @@ def test_hotspot_trends_endpoint_returns_bulk_24_hourly_buckets():
         bucket = next(item for item in first["buckets"] if item["bucket_start"].startswith("2026-05-07T12:00:00"))
         assert bucket["event_count"] == 1
         assert bucket["max_severity"] == 0.4
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_endpoint_returns_404_for_missing_hotspot():
+    engine = _engine()
+    db = _session(engine)
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/999/briefing")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Hotspot not found"
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_returns_grounded_facts_timeline_and_citations():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_hotspot())
+    event = _event(
+        source_id="briefing-1",
+        title="Transit protest disrupts downtown service",
+        source_name="eventregistry",
+        source_url="https://example.test/event",
+        occurred_at=datetime(2026, 5, 7, 12, 15, 0),
+        severity_score=0.82,
+        confidence_score=0.74,
+    )
+    db.add(event)
+    db.flush()
+    db.add(EventSource(
+        event_id=event.id,
+        source_type="eventregistry",
+        source_record_id="article-1",
+        source_name="WHYY",
+        source_url="https://example.test/article-1",
+        source_title="Transit protest disrupts downtown service",
+        source_published_at=datetime(2026, 5, 7, 12, 20, 0),
+        source_trust_weight=1.0,
+        location_precision="city",
+    ))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["hotspot_id"] == 1
+        assert "Philadelphia Metro" in body["headline"]
+        assert "confirmed event density" in body["why_it_matters"]
+        assert any(fact["label"] == "Highest severity" for fact in body["key_facts"])
+        assert body["timeline"][0]["title"] == "Transit protest disrupts downtown service"
+        assert body["timeline"][0]["citation_ids"]
+        assert any(citation["source_name"] == "WHYY" and citation["counted"] for citation in body["citations"])
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_keeps_zero_weight_sources_provenance_only():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_hotspot())
+    event = _event(source_id="briefing-zero", source_count=1)
+    db.add(event)
+    db.flush()
+    db.add(EventSource(
+        event_id=event.id,
+        source_type="bluesky",
+        source_record_id="social-copy",
+        source_name="Bluesky",
+        source_title="Social copy of the protest report",
+        source_published_at=datetime(2026, 5, 7, 12, 30, 0),
+        source_trust_weight=0.0,
+        location_precision="city",
+    ))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        social = next(citation for citation in body["citations"] if citation["source_type"] == "bluesky")
+        counted_sources = next(fact for fact in body["key_facts"] if fact["label"] == "Counted sources")
+        assert social["counted"] is False
+        assert social["note"] == "provenance only"
+        assert counted_sources["value"] == "1"
+        assert any("not counted as corroboration" in caveat for caveat in body["caveats"])
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_uses_event_fallback_citation_without_source_rows():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_hotspot())
+    db.add(_event(
+        source_id="briefing-fallback",
+        title="Downtown protest grows",
+        source_name="gdelt",
+        source_url="https://example.test/gdelt-event",
+    ))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["citations"] == [{
+            "id": 1,
+            "event_id": 1,
+            "source_type": "gdelt",
+            "source_name": "gdelt",
+            "title": "Downtown protest grows",
+            "url": "https://example.test/gdelt-event",
+            "published_at": "2026-05-07T12:00:00",
+            "counted": True,
+            "note": "confirmed event source",
+        }]
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_excludes_unlinked_observations_from_claims():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_hotspot())
+    db.add(_event(source_id="briefing-confirmed", title="Confirmed downtown protest"))
+    _lead(db, record_id="unlinked-rumor", confidence=0.72)
+    db.query(Observation).filter(Observation.evidence_id.isnot(None)).one().title = "Unverified courthouse rumor"
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        serialized = str(body)
+        assert "Confirmed downtown protest" in serialized
+        assert "Unverified courthouse rumor" not in serialized
+        assert len(body["timeline"]) == 1
     finally:
         app.dependency_overrides.clear()
         db.close()

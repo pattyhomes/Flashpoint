@@ -12,6 +12,7 @@ export const fetchEvents        = (limit = 500, offset = 0) => request(`/events/
 export const fetchEventDetail   = (id)                      => request(`/events/${id}`)
 export const fetchHotspots      = ()                        => request('/hotspots/')
 export const fetchHotspotDetail = (id)                      => request(`/hotspots/${id}`)
+export const fetchHotspotBriefing = (id)                    => request(`/hotspots/${id}/briefing`)
 export const fetchHotspotTrend  = (id, hours = 24)           => request(`/hotspots/${id}/trend?hours=${hours}`)
 export const fetchHotspotTrends = (ids, hours = 24) => {
   const params = new URLSearchParams()

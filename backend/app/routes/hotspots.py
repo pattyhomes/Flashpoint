@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Event, Hotspot
-from app.schemas import HotspotDetailOut, HotspotOut, HotspotTrendListOut, HotspotTrendOut
+from app.schemas import HotspotBriefingOut, HotspotDetailOut, HotspotOut, HotspotTrendListOut, HotspotTrendOut
+from app.services.hotspot_briefing import build_hotspot_briefing
 
 router = APIRouter(prefix="/hotspots", tags=["hotspots"])
 
@@ -107,6 +108,14 @@ def hotspot_trend(
         raise HTTPException(status_code=404, detail="Hotspot not found")
 
     return _trend_payload(hotspot_id, hours, now or datetime.utcnow(), db)
+
+
+@router.get("/{hotspot_id}/briefing", response_model=HotspotBriefingOut)
+def hotspot_briefing(hotspot_id: int, db: Session = Depends(get_db)):
+    hotspot = db.query(Hotspot).filter(Hotspot.id == hotspot_id).first()
+    if not hotspot:
+        raise HTTPException(status_code=404, detail="Hotspot not found")
+    return build_hotspot_briefing(db, hotspot)
 
 
 @router.get("/{hotspot_id}", response_model=HotspotDetailOut)

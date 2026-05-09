@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +175,46 @@ class HotspotTrendOut(BaseModel):
 
 class HotspotTrendListOut(BaseModel):
     trends: list[HotspotTrendOut]
+
+
+class HotspotBriefingFact(BaseModel):
+    label: str
+    value: str
+    citation_ids: list[int] = Field(default_factory=list)
+
+
+class HotspotBriefingTimelineItem(BaseModel):
+    event_id: int
+    occurred_at: datetime
+    title: str
+    event_type: str
+    location: str
+    severity_score: float
+    confidence_score: float
+    citation_ids: list[int] = Field(default_factory=list)
+
+
+class HotspotBriefingCitation(BaseModel):
+    id: int
+    event_id: int
+    source_type: str
+    source_name: str | None = None
+    title: str | None = None
+    url: str | None = None
+    published_at: datetime | None = None
+    counted: bool
+    note: str
+
+
+class HotspotBriefingOut(BaseModel):
+    hotspot_id: int
+    generated_at: datetime
+    headline: str
+    why_it_matters: str
+    key_facts: list[HotspotBriefingFact] = Field(default_factory=list)
+    timeline: list[HotspotBriefingTimelineItem] = Field(default_factory=list)
+    citations: list[HotspotBriefingCitation] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

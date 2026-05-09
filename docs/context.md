@@ -22,6 +22,7 @@ Last updated: 2026-05-09
 | Auto-link/auto-promote safety rules | initial implementation done |
 | Stage 1.5 source health, Census geocoder, local news/RSS | done |
 | Hotspot trend endpoint | done |
+| Deterministic Hotspot Briefing v1 | done |
 | Local bundled fonts | done |
 
 ## Active Direction
@@ -33,6 +34,12 @@ is explicitly reopened.
 The Pi is a display appliance. Heavy AI, Postgres/PostGIS, worker queues, richer
 analyst workflows, and offline map tiles are future stages, not current runtime
 requirements.
+
+Hotspot Briefing v1 is a deterministic explainability layer over confirmed
+events and cited provenance. It is safe to run in the current Pi-local
+FastAPI/SQLite app because it does not call local models or add background AI
+work. Future generated summaries should use a Mac Mini-hosted Ollama/Llama
+service over cached briefing packets; the Pi remains display-only.
 
 ## Current Branch/Deployment
 

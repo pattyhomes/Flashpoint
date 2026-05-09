@@ -3,6 +3,7 @@ import {
   dismissObservation,
   fetchEventDetail,
   fetchEvents,
+  fetchHotspotBriefing,
   fetchHotspotDetail,
   fetchHotspots,
   fetchHotspotTrend,
@@ -70,8 +71,10 @@ export default function App() {
 
   const [selectedItem, setSelectedItem] = useState(null)
   const [hotspotDetail, setHotspotDetail] = useState(null)
+  const [hotspotBriefing, setHotspotBriefing] = useState(null)
   const [hotspotTrend, setHotspotTrend] = useState(null)
   const [hotspotDetailLoading, setHotspotDetailLoading] = useState(false)
+  const [hotspotBriefingLoading, setHotspotBriefingLoading] = useState(false)
   const [eventDetail, setEventDetail] = useState(null)
   const [eventDetailLoading, setEventDetailLoading] = useState(false)
   const pendingHotspotId = useRef(null)
@@ -269,8 +272,10 @@ export default function App() {
     pendingEventId.current = null
     setSelectedItem(null)
     setHotspotDetail(null)
+    setHotspotBriefing(null)
     setHotspotTrend(null)
     setHotspotDetailLoading(false)
+    setHotspotBriefingLoading(false)
     setEventDetail(null)
     setEventDetailLoading(false)
   }
@@ -305,13 +310,16 @@ export default function App() {
       setEventDetail(null)
       setEventDetailLoading(false)
       setHotspotDetail(null)
+      setHotspotBriefing(null)
       setHotspotTrend(null)
       setHotspotDetailLoading(true)
-      Promise.all([fetchHotspotDetail(id), fetchHotspotTrend(id, 24)])
-        .then(([detail, trend]) => {
+      setHotspotBriefingLoading(true)
+      Promise.all([fetchHotspotDetail(id), fetchHotspotTrend(id, 24), fetchHotspotBriefing(id)])
+        .then(([detail, trend, briefing]) => {
           if (pendingHotspotId.current === id) {
             setHotspotDetail(detail)
             setHotspotTrend(trend)
+            setHotspotBriefing(briefing)
           }
         })
         .catch(error => {
@@ -319,15 +327,20 @@ export default function App() {
           if (pendingHotspotId.current === id) clearSelection()
         })
         .finally(() => {
-          if (pendingHotspotId.current === id) setHotspotDetailLoading(false)
+          if (pendingHotspotId.current === id) {
+            setHotspotDetailLoading(false)
+            setHotspotBriefingLoading(false)
+          }
         })
     } else if (item.type === 'event') {
       const id = item.data.id
       pendingEventId.current = id
       pendingHotspotId.current = null
       setHotspotDetail(null)
+      setHotspotBriefing(null)
       setHotspotTrend(null)
       setHotspotDetailLoading(false)
+      setHotspotBriefingLoading(false)
       setEventDetail(null)
       setEventDetailLoading(true)
       fetchEventDetail(id)
@@ -567,6 +580,8 @@ export default function App() {
             onClose: clearSelection,
             hotspotDetail,
             hotspotDetailLoading,
+            hotspotBriefing,
+            hotspotBriefingLoading,
             hotspotTrend,
             eventDetail,
             eventDetailLoading,

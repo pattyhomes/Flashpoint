@@ -149,6 +149,13 @@ After real data quality and durable backend exist:
 - analyst feedback loop for threshold tuning
 - optional local or server-side generation with strict caching and provenance
 
+Deterministic Hotspot Briefing v1 is the bridge into this stage: it assembles
+grounded briefing packets from confirmed events and cited provenance without
+calling a model. The intended future generation topology is a Mac Mini-hosted
+Ollama/Llama service summarizing those cached packets with citations preserved.
+The Raspberry Pi remains a lightweight display appliance and must not host heavy
+model inference.
+
 ## Recommended Next Sprint
 
 After Stage 1.5 operational rollout:

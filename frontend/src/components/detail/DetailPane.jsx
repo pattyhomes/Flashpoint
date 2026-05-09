@@ -85,6 +85,95 @@ function Sources({ sources }) {
   ))
 }
 
+function CitationRefs({ ids = [], citationsById }) {
+  const refs = ids.map(id => citationsById.get(id)).filter(Boolean)
+  if (refs.length === 0) return null
+  return (
+    <span className="briefing-cites">
+      {refs.map(citation => (
+        citation.url ? (
+          <a key={citation.id} href={citation.url} target="_blank" rel="noreferrer">
+            {citation.id}
+          </a>
+        ) : (
+          <b key={citation.id}>{citation.id}</b>
+        )
+      ))}
+    </span>
+  )
+}
+
+function HotspotBriefing({ briefing, loading }) {
+  if (loading && !briefing) {
+    return (
+      <section className="detail-section briefing-panel">
+        <div className="detail-section__title">
+          <span>Briefing</span>
+          <b>LOADING</b>
+        </div>
+        <span className="empty-note">Building grounded hotspot briefing.</span>
+      </section>
+    )
+  }
+  if (!briefing) return null
+
+  const citationsById = new Map((briefing.citations || []).map(citation => [citation.id, citation]))
+  return (
+    <section className="detail-section briefing-panel">
+      <div className="detail-section__title">
+        <span>Briefing</span>
+        {loading && <b>REFRESHING</b>}
+      </div>
+      <div className="briefing-panel__summary">
+        <b>{briefing.headline}</b>
+        <p>{briefing.why_it_matters}</p>
+      </div>
+      <div className="briefing-facts">
+        {(briefing.key_facts || []).map(fact => (
+          <div key={fact.label} className="briefing-fact">
+            <span>{fact.label}</span>
+            <b>{fact.value}</b>
+            <CitationRefs ids={fact.citation_ids} citationsById={citationsById} />
+          </div>
+        ))}
+      </div>
+      <div className="briefing-timeline">
+        {(briefing.timeline || []).map(item => (
+          <div key={item.event_id} className="briefing-timeline-row">
+            <span>{relativeTime(item.occurred_at)}</span>
+            <b>{item.title}</b>
+            <em>{item.location}</em>
+            <CitationRefs ids={item.citation_ids} citationsById={citationsById} />
+          </div>
+        ))}
+      </div>
+      {(briefing.citations || []).length > 0 && (
+        <div className="briefing-citation-ledger">
+          {briefing.citations.slice(0, 6).map(citation => (
+            <div key={citation.id} className="briefing-citation-row">
+              <span>{citation.id}</span>
+              <b>{citation.counted ? 'COUNTED' : 'PROV'}</b>
+              {citation.url ? (
+                <a href={citation.url} target="_blank" rel="noreferrer">
+                  {citation.source_name || citation.source_type}
+                </a>
+              ) : (
+                <em>{citation.source_name || citation.source_type}</em>
+              )}
+              <i>{citation.note}</i>
+            </div>
+          ))}
+        </div>
+      )}
+      {(briefing.caveats || []).length > 0 && (
+        <div className="briefing-caveats">
+          {briefing.caveats.map(caveat => <span key={caveat}>{caveat}</span>)}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function SignalContext({ signals, lat, lon }) {
   const rows = nearbySignals(signals, lat, lon)
   return (
@@ -141,7 +230,7 @@ function EventDetail({ event, detail, detailLoading, signals }) {
   )
 }
 
-function HotspotDetail({ hotspot, memberEvents = [], loading, trend, signals }) {
+function HotspotDetail({ hotspot, memberEvents = [], loading, briefing, briefingLoading, trend, signals }) {
   return (
     <div className="detail-body">
       <div className="detail-kicker">PRIORITY HOTSPOT · {hotspot.trend_state || 'stable'}</div>
@@ -158,6 +247,7 @@ function HotspotDetail({ hotspot, memberEvents = [], loading, trend, signals }) 
         { label: 'Momentum', value: hotspot.momentum_score },
         { label: 'Confidence', value: hotspot.confidence_score },
       ]} />
+      <HotspotBriefing briefing={briefing} loading={briefingLoading} />
       <TrendChart trend={trend} />
       <SignalContext signals={signals} lat={hotspot.centroid_lat} lon={hotspot.centroid_lon} />
       <section className="detail-section">
@@ -185,6 +275,8 @@ export default function DetailPane({
   onClose,
   hotspotDetail,
   hotspotDetailLoading,
+  hotspotBriefing,
+  hotspotBriefingLoading,
   hotspotTrend,
   eventDetail,
   eventDetailLoading,
@@ -224,6 +316,8 @@ export default function DetailPane({
           hotspot={hotspotDetail || item.data}
           memberEvents={hotspotDetail?.member_events || []}
           loading={hotspotDetailLoading}
+          briefing={hotspotBriefing}
+          briefingLoading={hotspotBriefingLoading}
           trend={hotspotTrend}
           signals={signals}
         />

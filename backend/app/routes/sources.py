@@ -89,6 +89,7 @@ def _source_payload(source_name: str, last_run: IngestRun | None, last_success: 
         "records_rejected": last_run.records_rejected if last_run else 0,
         "reject_counts": _json_dict(last_run.reject_counts_json if last_run else None),
         "sample_records": _json_list(last_run.sample_records_json if last_run else None),
+        "source_breakdown": _json_list(last_run.source_breakdown_json if last_run else None),
         "runnable": source_name in RUNNABLE_OBSERVATION_SOURCES,
         "stale": stale,
     }
@@ -143,6 +144,7 @@ def _run_payload(run: IngestRun) -> dict:
         "records_rejected": run.records_rejected,
         "reject_counts": _json_dict(run.reject_counts_json),
         "sample_records": _json_list(run.sample_records_json),
+        "source_breakdown": _json_list(run.source_breakdown_json),
         "error_message": run.error_message,
     }
 

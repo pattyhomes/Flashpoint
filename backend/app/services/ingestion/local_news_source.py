@@ -55,7 +55,14 @@ class LocalNewsSource:
     source_name = "local_news"
 
     def __init__(self):
-        self.stats = {"fetched": 0, "rejected": 0, "reject_counts": {}, "sample_records": []}
+        self.stats = {
+            "fetched": 0,
+            "rejected": 0,
+            "reject_counts": {},
+            "sample_records": [],
+            "source_breakdown": [],
+        }
+        self._feed_stats: dict[str, dict] = {}
         self.geocoder = LocalGeocoder()
         self._robots_cache: dict[str, robotparser.RobotFileParser] = {}
 
@@ -72,8 +79,10 @@ class LocalNewsSource:
         feed_names = {feed_url: name for feed_url, _, name in feed_configs}
         for feed_url in feed_urls:
             domains = next(domains for url, domains, _ in feed_configs if url == feed_url)
+            feed_name = feed_names[feed_url]
+            self._feed_stat(feed_name)
             if _domain(feed_url) not in domains:
-                self._reject("domain_not_allowed")
+                self._reject("domain_not_allowed", feed_name=feed_name)
                 continue
             try:
                 response = httpx.get(
@@ -83,14 +92,14 @@ class LocalNewsSource:
                     follow_redirects=True,
                 )
                 response.raise_for_status()
-                candidates.extend(self._parse_feed(response.text, feed_url, domains, feed_names[feed_url]))
+                candidates.extend(self._parse_feed(response.text, feed_url, domains, feed_name))
             except Exception as exc:
                 print(f"[local_news] Fetch error for {feed_url}: {exc}")
                 self._reject("fetch_error", self._sample(
                     "fetch_error",
-                    title=f"Feed fetch failed: {feed_names[feed_url]}",
+                    title=f"Feed fetch failed: {feed_name}",
                     link=feed_url,
-                    feed_name=feed_names[feed_url],
+                    feed_name=feed_name,
                     reason=str(exc)[:220],
                 ))
         return candidates[: settings.local_news_max_records]
@@ -121,8 +130,10 @@ class LocalNewsSource:
         candidates = []
         for item in items:
             self.stats["fetched"] += 1
+            self._feed_stat(feed_name)["records_fetched"] += 1
             candidate = self._candidate_from_item(item, feed_url, allowed_domains, feed_name)
             if candidate:
+                self._feed_stat(feed_name)["observations_inserted"] += 1
                 candidates.append(candidate)
         return candidates
 
@@ -269,15 +280,38 @@ class LocalNewsSource:
             "reason": reason,
         }
 
-    def _reject(self, category: str, sample: dict | None = None):
+    def _feed_stat(self, feed_name: str | None) -> dict:
+        name = feed_name or "Local News"
+        if name not in self._feed_stats:
+            metric = {
+                "source_name": name,
+                "records_fetched": 0,
+                "observations_inserted": 0,
+                "records_rejected": 0,
+                "reject_counts": {},
+                "sample_records": [],
+            }
+            self._feed_stats[name] = metric
+            self.stats["source_breakdown"].append(metric)
+        return self._feed_stats[name]
+
+    def _reject(self, category: str, sample: dict | None = None, feed_name: str | None = None):
         self.stats["rejected"] += 1
         counts = self.stats["reject_counts"]
         counts[category] = counts.get(category, 0) + 1
-        if sample and len(self.stats["sample_records"]) < 8:
-            self.stats["sample_records"].append({
+        metric = self._feed_stat(feed_name or (sample or {}).get("source_name"))
+        metric["records_rejected"] += 1
+        metric_counts = metric["reject_counts"]
+        metric_counts[category] = metric_counts.get(category, 0) + 1
+        if sample:
+            normalized_sample = {
                 "category": category,
                 "source_name": sample.get("source_name"),
                 "title": sample.get("title"),
                 "source_url": sample.get("source_url"),
                 "reason": sample.get("reason"),
-            })
+            }
+            if len(self.stats["sample_records"]) < 8:
+                self.stats["sample_records"].append(normalized_sample)
+            if len(metric["sample_records"]) < 4:
+                metric["sample_records"].append(normalized_sample)

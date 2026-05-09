@@ -12,4 +12,4 @@ esac
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT/backend"
-"$REPO_ROOT/.venv/bin/python" -c "from app.jobs.seed import run_observation_source_ingestion; run_observation_source_ingestion('$SOURCE')"
+"$REPO_ROOT/.venv/bin/python" -c "from app.main import _migrate; from app.jobs.seed import run_observation_source_ingestion; _migrate(); run_observation_source_ingestion('$SOURCE')"

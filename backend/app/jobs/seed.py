@@ -527,6 +527,11 @@ def run_observation_source_ingestion(source_name: str):
             sort_keys=True,
             separators=(",", ":"),
         )
+        run.source_breakdown_json = json.dumps(
+            _bounded_source_breakdown(stats.get("source_breakdown", [])),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
         db.commit()
         if confirmed_changed:
             compute_hotspots(db)
@@ -558,6 +563,34 @@ def _bounded_sample_records(value, limit: int = 8) -> list[dict]:
             "reason": str(item.get("reason") or "")[:220] or None,
         })
     return samples
+
+
+def _bounded_source_breakdown(value, limit: int = 12) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    rows = []
+    for item in value[:limit]:
+        if not isinstance(item, dict):
+            continue
+        rows.append({
+            "source_name": str(item.get("source_name") or "")[:128] or "Unknown",
+            "records_fetched": _safe_int(item.get("records_fetched")),
+            "observations_inserted": _safe_int(item.get("observations_inserted")),
+            "records_rejected": _safe_int(item.get("records_rejected")),
+            "reject_counts": {
+                str(key)[:64]: _safe_int(val)
+                for key, val in (item.get("reject_counts") or {}).items()
+            } if isinstance(item.get("reject_counts"), dict) else {},
+            "sample_records": _bounded_sample_records(item.get("sample_records", []), limit=4),
+        })
+    return rows
+
+
+def _safe_int(value) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def reset_and_seed():

@@ -47,6 +47,7 @@ function SourceHealth({ sourceStatus, systemStatus, sourceRunBusy, onRunSource }
           const rejectEntries = Object.entries(source.reject_counts || {}).sort((a, b) => b[1] - a[1])
           const topReject = rejectEntries[0]
           const samples = source.sample_records || []
+          const breakdown = source.source_breakdown || []
 
           return (
             <div
@@ -78,6 +79,16 @@ function SourceHealth({ sourceStatus, systemStatus, sourceRunBusy, onRunSource }
                       <div className="source-sample" key={`${source.source_name}-${index}`}>
                         <b>{labelize(sample.category)}</b>
                         <span>{sample.title || sample.reason || 'Sample record'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {breakdown.length > 0 && (
+                  <div className="source-breakdown">
+                    {breakdown.slice(0, 4).map(feed => (
+                      <div className="source-breakdown__row" key={`${source.source_name}-${feed.source_name}`}>
+                        <b>{feed.source_name || 'Feed'}</b>
+                        <span>F {formatCount(feed.records_fetched)} A {formatCount(feed.observations_inserted)} R {formatCount(feed.records_rejected)}</span>
                       </div>
                     ))}
                   </div>

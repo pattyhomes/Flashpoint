@@ -210,6 +210,15 @@ class SourceSampleOut(BaseModel):
     reason: str | None = None
 
 
+class SourceBreakdownOut(BaseModel):
+    source_name: str
+    records_fetched: int = 0
+    observations_inserted: int = 0
+    records_rejected: int = 0
+    reject_counts: dict[str, int] = {}
+    sample_records: list[SourceSampleOut] = []
+
+
 class SourceStatusOut(BaseModel):
     source_name: str
     status: str
@@ -222,6 +231,7 @@ class SourceStatusOut(BaseModel):
     records_rejected: int
     reject_counts: dict[str, int]
     sample_records: list[SourceSampleOut] = []
+    source_breakdown: list[SourceBreakdownOut] = []
     runnable: bool = False
     stale: bool
 
@@ -245,6 +255,7 @@ class SourceRunOut(BaseModel):
     records_rejected: int
     reject_counts: dict[str, int] = {}
     sample_records: list[SourceSampleOut] = []
+    source_breakdown: list[SourceBreakdownOut] = []
     error_message: str | None = None
 
 

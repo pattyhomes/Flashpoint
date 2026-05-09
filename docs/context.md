@@ -81,6 +81,10 @@ and exposes them through `/api/v1/sources/status`, the Sources rail, and
 `scripts/report_source_quality.py`. These samples are operations metadata only;
 they do not create events or affect hotspots.
 
+Local-news tuning also persists a bounded per-feed breakdown on `IngestRun` so
+the operator can compare LAist, Texas Tribune, WHYY Philadelphia, and future RSS
+feeds independently in the Sources rail and report script.
+
 The Sources rail now doubles as the Stage 1.5 source operations console: it
 shows run history, quality samples, and Run Now controls for bounded observation
 sources. Confirmed-source and hotspot rules remain unchanged.
@@ -99,6 +103,12 @@ volume justifies Stage 2 Postgres/PostGIS + workers.
   annotated as healthy noisy feeds.
 - The eval smoke fixture now includes sampled LAist false positives from that
   Pi run.
+- WHYY Philadelphia was promoted from watchlist to the regional RSS pilot after
+  validating `https://whyy.org/articles/feed/`; `https://whyy.org/news/feed/`
+  returned 403 and should not be used.
+- A local three-feed smoke run fetched 52 RSS records: LAist 12, Texas Tribune
+  20, WHYY Philadelphia 20. All were rejected as `classified_out`, with
+  per-feed samples preserved.
 - Non-persisted Bluesky probe returned 403 from the public search endpoint; keep
   Bluesky disabled until authenticated access or adapter changes are available.
 - Current volume does not justify Stage 2 Postgres/PostGIS + workers yet.

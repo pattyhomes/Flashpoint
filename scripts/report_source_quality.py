@@ -58,6 +58,7 @@ def main():
                 "records_rejected": run.records_rejected,
                 "reject_counts": _json(run.reject_counts_json, {}),
                 "sample_records": _json(run.sample_records_json, []),
+                "source_breakdown": _json(run.source_breakdown_json, []),
             })
         print(json.dumps({"sources": report}, indent=2, sort_keys=True))
     finally:

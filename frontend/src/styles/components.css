@@ -674,6 +674,36 @@
   margin-top: 6px;
 }
 
+.source-breakdown {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.source-breakdown__row {
+  min-height: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-left: 2px solid rgba(109,179,255,0.22);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.source-breakdown__row b,
+.source-breakdown__row span {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.source-breakdown__row span {
+  color: var(--t-2);
+}
+
 .source-row__run {
   width: fit-content;
   min-height: 34px;

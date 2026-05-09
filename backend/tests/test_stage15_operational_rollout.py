@@ -54,13 +54,15 @@ def test_rss_registry_loads_enabled_regional_pilot_feeds():
     feeds = load_enabled_local_news_feeds()
 
     names = {feed.name for feed in feeds}
-    assert {"LAist", "Texas Tribune"} <= names
+    assert {"LAist", "Texas Tribune", "WHYY Philadelphia"} <= names
     assert "ABC News U.S." not in names
     assert all(feed.feed_url for feed in feeds)
     assert all(feed.allowed_domains for feed in feeds)
     assert any(feed.name == "LAist" and feed.feed_url == "https://laist.com/news.rss" for feed in feeds)
+    assert any(feed.name == "WHYY Philadelphia" and feed.feed_url == "https://whyy.org/articles/feed/" for feed in feeds)
     assert any("laist.com" in feed.allowed_domains for feed in feeds)
     assert any("feeds.texastribune.org" in feed.allowed_domains for feed in feeds)
+    assert any("whyy.org" in feed.allowed_domains for feed in feeds)
 
 
 def test_rss_registry_rejects_enabled_feed_without_allowlist(tmp_path):
@@ -221,6 +223,22 @@ def test_observation_source_ingestion_persists_sample_records(db_engine):
                     "reason": "No unrest classifier signal.",
                 }
             ],
+            "source_breakdown": [
+                {
+                    "source_name": "LAist",
+                    "records_fetched": 2,
+                    "observations_inserted": 0,
+                    "records_rejected": 2,
+                    "reject_counts": {"classified_out": 2},
+                    "sample_records": [
+                        {
+                            "category": "classified_out",
+                            "source_name": "LAist",
+                            "title": "City council approves budget",
+                        }
+                    ],
+                }
+            ],
         }
 
         def fetch(self):
@@ -235,10 +253,13 @@ def test_observation_source_ingestion_persists_sample_records(db_engine):
     db = Session()
     run = db.query(IngestRun).filter(IngestRun.ingest_source == "local_news").one()
     samples = json.loads(run.sample_records_json)
+    breakdown = json.loads(run.source_breakdown_json)
     db.close()
 
     assert samples[0]["category"] == "classified_out"
     assert samples[0]["title"] == "City council approves budget"
+    assert breakdown[0]["source_name"] == "LAist"
+    assert breakdown[0]["records_rejected"] == 2
 
 
 def test_sources_status_exposes_sample_records(client, db_engine):
@@ -258,6 +279,16 @@ def test_sources_status_exposes_sample_records(client, db_engine):
         sample_records_json=json.dumps([
             {"category": "classified_out", "source_name": "LAist", "title": "Budget story"}
         ]),
+        source_breakdown_json=json.dumps([
+            {
+                "source_name": "LAist",
+                "records_fetched": 1,
+                "observations_inserted": 0,
+                "records_rejected": 1,
+                "reject_counts": {"classified_out": 1},
+                "sample_records": [{"category": "classified_out", "source_name": "LAist", "title": "Budget story"}],
+            }
+        ]),
     ))
     db.commit()
     db.close()
@@ -266,6 +297,8 @@ def test_sources_status_exposes_sample_records(client, db_engine):
     assert response.status_code == 200
     source = next(row for row in response.json()["sources"] if row["source_name"] == "local_news")
     assert source["sample_records"][0]["title"] == "Budget story"
+    assert source["source_breakdown"][0]["source_name"] == "LAist"
+    assert source["source_breakdown"][0]["records_rejected"] == 1
 
 
 def test_local_news_records_diagnostic_samples_for_rejections():
@@ -321,12 +354,16 @@ def test_local_news_records_diagnostic_samples_for_rejections():
     assert candidates == []
     assert source.stats["sample_records"][0]["category"] == "classified_out"
     assert source.stats["sample_records"][0]["title"] == "Best weekend restaurants in Los Angeles"
+    assert source.stats["source_breakdown"][0]["source_name"] == "LAist"
+    assert source.stats["source_breakdown"][0]["records_fetched"] == 1
+    assert source.stats["source_breakdown"][0]["records_rejected"] == 1
 
 
 def test_source_quality_report_helper_exists_and_mentions_samples():
     script = Path(__file__).resolve().parents[2] / "scripts" / "report_source_quality.py"
     text = script.read_text(encoding="utf-8")
     assert "sample_records_json" in text
+    assert "source_breakdown_json" in text
     assert "records_rejected" in text
 
 

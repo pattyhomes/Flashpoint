@@ -1,9 +1,10 @@
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
 from app.models import Event, EventSource, Hotspot
+from app.services.event_display import EventDisplay, display_for_event
 from app.services.intelligence import source_family
 from app.utils.time import utcnow_naive
 
@@ -18,9 +19,10 @@ def _location(event: Event) -> str:
     return ", ".join(part for part in [event.city, event.state] if part) or event.country
 
 
-def _event_label(event: Event) -> str:
-    if event.source_name == "gdelt":
-        return f"{event.event_type} signal - {_location(event)}"
+def _event_label(event: Event, display_by_event: dict[int, EventDisplay] | None = None) -> str:
+    display = (display_by_event or {}).get(event.id)
+    if display:
+        return display.display_title
     return event.title
 
 
@@ -43,15 +45,6 @@ def _change_percent(current: int, previous: int) -> float | None:
 def _source_label(source_type: str | None) -> str:
     family = source_family(source_type, None)
     return family if family != "unknown" else (source_type or "unknown")
-
-
-def _citation_key(citation: dict) -> tuple[str, str, str, str]:
-    return (
-        citation.get("source_type") or "",
-        citation.get("source_name") or "",
-        citation.get("url") or "",
-        citation.get("title") or "",
-    )
 
 
 def _source_rows(db: Session, events: list[Event]) -> dict[int, list[EventSource]]:
@@ -97,8 +90,7 @@ def _add_citation(
     return citation["id"]
 
 
-def _build_citations(db: Session, events: list[Event]) -> tuple[list[dict], dict[int, list[int]]]:
-    grouped = _source_rows(db, events)
+def _build_citations(events: list[Event], grouped: dict[int, list[EventSource]]) -> tuple[list[dict], dict[int, list[int]]]:
     citations: list[dict] = []
     citation_ids_by_event: dict[int, list[int]] = {}
 
@@ -146,19 +138,33 @@ def _dominant_event_types(events: list[Event], limit: int = 4) -> list[dict]:
     ]
 
 
-def _representative_events(events: list[Event], citation_ids_by_event: dict[int, list[int]], limit: int = 3) -> list[dict]:
-    ranked = sorted(events, key=lambda event: (event.severity_score or 0.0, event.confidence_score or 0.0, event.occurred_at), reverse=True)
+def _event_ref(event: Event, citation_ids_by_event: dict[int, list[int]], display_by_event: dict[int, EventDisplay]) -> dict:
+    display = display_by_event[event.id]
+    return {
+        "event_id": event.id,
+        "occurred_at": event.occurred_at,
+        "title": event.title,
+        "display_title": display.display_title,
+        "event_type": event.event_type,
+        "location": _location(event),
+        "severity_score": event.severity_score,
+        "confidence_score": event.confidence_score,
+        "specificity_level": display.specificity_level,
+        "specificity_reason": display.specificity_reason,
+        "is_generic_classification": display.is_generic_classification,
+        "citation_ids": citation_ids_by_event.get(event.id, [])[:3],
+    }
+
+
+def _representative_events(
+    events: list[Event],
+    citation_ids_by_event: dict[int, list[int]],
+    display_by_event: dict[int, EventDisplay],
+    limit: int = 3,
+) -> list[dict]:
+    ranked = _representative_event_objects(events, display_by_event, limit=limit)
     return [
-        {
-            "event_id": event.id,
-            "occurred_at": event.occurred_at,
-            "title": _event_label(event),
-            "event_type": event.event_type,
-            "location": _location(event),
-            "severity_score": event.severity_score,
-            "confidence_score": event.confidence_score,
-            "citation_ids": citation_ids_by_event.get(event.id, [])[:3],
-        }
+        _event_ref(event, citation_ids_by_event, display_by_event)
         for event in ranked[:limit]
     ]
 
@@ -187,6 +193,7 @@ def _build_why_now(
     events: list[Event],
     now: datetime,
     citation_ids_by_event: dict[int, list[int]],
+    display_by_event: dict[int, EventDisplay],
 ) -> tuple[dict, list[Event], list[Event]]:
     current_start = now - timedelta(hours=24)
     previous_start = now - timedelta(hours=48)
@@ -209,7 +216,7 @@ def _build_why_now(
             "label": "Severity",
             "value": f"{_pct(current_avg_sev / 1.0)}%",
             "detail": f"Average severity changed by {round(current_avg_sev - previous_avg_sev, 3):+0.3f} versus the prior window.",
-            "citation_ids": [citation_id for event in _representative_event_objects(current_events, limit=2) for citation_id in citation_ids_by_event.get(event.id, [])[:1]],
+            "citation_ids": [citation_id for event in _representative_event_objects(current_events, display_by_event, limit=2) for citation_id in citation_ids_by_event.get(event.id, [])[:1]],
         },
         {
             "label": "Momentum",
@@ -218,12 +225,12 @@ def _build_why_now(
             "citation_ids": [],
         },
     ]
-    top_event = max(current_events or events, key=lambda event: event.severity_score or 0.0, default=None)
+    top_event = next(iter(_representative_event_objects(current_events or events, display_by_event, limit=1)), None)
     if top_event:
         drivers.append({
             "label": "Top driver",
-            "value": _event_label(top_event),
-            "detail": f"{_pct(top_event.severity_score)}% severity, {_location(top_event)}.",
+            "value": _event_label(top_event, display_by_event),
+            "detail": f"{_pct(top_event.severity_score)}% severity, {_location(top_event)}. {display_by_event[top_event.id].specificity_reason}",
             "citation_ids": citation_ids_by_event.get(top_event.id, [])[:2],
         })
 
@@ -249,8 +256,21 @@ def _build_why_now(
     }, current_events, previous_events
 
 
-def _representative_event_objects(events: list[Event], limit: int = 3) -> list[Event]:
-    return sorted(events, key=lambda event: (event.severity_score or 0.0, event.confidence_score or 0.0, event.occurred_at), reverse=True)[:limit]
+def _representative_event_objects(
+    events: list[Event],
+    display_by_event: dict[int, EventDisplay],
+    limit: int = 3,
+) -> list[Event]:
+    return sorted(
+        events,
+        key=lambda event: (
+            display_by_event[event.id].explainability_score,
+            event.severity_score or 0.0,
+            event.confidence_score or 0.0,
+            event.occurred_at,
+        ),
+        reverse=True,
+    )[:limit]
 
 
 def _build_timeline_groups(
@@ -258,6 +278,7 @@ def _build_timeline_groups(
     events: list[Event],
     now: datetime,
     citation_ids_by_event: dict[int, list[int]],
+    display_by_event: dict[int, EventDisplay],
 ) -> list[dict]:
     windows = [
         ("Last 6h", now - timedelta(hours=6), now),
@@ -274,7 +295,7 @@ def _build_timeline_groups(
         if not bucket:
             continue
         dominant = Counter(event.event_type for event in bucket).most_common(1)[0][0]
-        reps = _representative_events(bucket, citation_ids_by_event, limit=3)
+        reps = _representative_events(bucket, citation_ids_by_event, display_by_event, limit=3)
         citation_ids = []
         for rep in reps:
             citation_ids.extend(rep["citation_ids"])
@@ -290,6 +311,30 @@ def _build_timeline_groups(
             "citation_ids": citation_ids[:6],
         })
     return groups
+
+
+def _build_specificity_assessment(events: list[Event], display_by_event: dict[int, EventDisplay]) -> dict:
+    displays = [display_by_event[event.id] for event in events]
+    incident_specific_count = sum(1 for display in displays if display.specificity_level == "specific")
+    classified_count = sum(1 for display in displays if display.is_generic_classification)
+    low_location_count = sum(1 for display in displays if display.specificity_level == "low_location")
+    source_gap_count = sum(1 for display in displays if display.specificity_level == "source_gap")
+    weak_count = classified_count + low_location_count + source_gap_count
+    low_specificity = bool(events) and (incident_specific_count == 0 or weak_count / len(events) >= 0.5)
+    if not events:
+        summary = "No active confirmed events are assigned, so incident specificity cannot be assessed."
+    elif low_specificity:
+        summary = "High volume, but low incident specificity: most records are broad classifications without clean incident descriptions."
+    else:
+        summary = f"{incident_specific_count} incident-specific records are available for explanation."
+    return {
+        "summary": summary,
+        "incident_specific_count": incident_specific_count,
+        "classified_count": classified_count,
+        "low_location_count": low_location_count,
+        "source_gap_count": source_gap_count,
+        "low_specificity": low_specificity,
+    }
 
 
 def _build_source_assessment(
@@ -367,14 +412,21 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
         .order_by(Event.occurred_at.desc(), Event.severity_score.desc())
         .all()
     )
-    citations, citation_ids_by_event = _build_citations(db, events)
+    grouped_sources = _source_rows(db, events)
+    citations, citation_ids_by_event = _build_citations(events, grouped_sources)
+    display_by_event = {
+        event.id: display_for_event(event, grouped_sources.get(event.id, []))
+        for event in events
+    }
+    specificity_assessment = _build_specificity_assessment(events, display_by_event)
     why_now, recent_events, previous_events = _build_why_now(
         hotspot=hotspot,
         events=events,
         now=now,
         citation_ids_by_event=citation_ids_by_event,
+        display_by_event=display_by_event,
     )
-    top_event = max(events, key=lambda event: event.severity_score or 0.0, default=None)
+    top_event = next(iter(_representative_event_objects(events, display_by_event, limit=1)), None)
     counted_citations = [citation for citation in citations if citation["counted"]]
     counted_families = {_source_label(citation.get("source_type")) for citation in counted_citations}
     provenance_only_count = len(citations) - len(counted_citations)
@@ -394,6 +446,8 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
             f"and {_trend_with_article(trend)} trend across {len(recent_events)} event"
             f"{'s' if len(recent_events) != 1 else ''} in the last 24 hours."
         )
+        if specificity_assessment["low_specificity"]:
+            why = f"{specificity_assessment['summary']} {why}"
     else:
         why = "No active confirmed events are currently assigned to this hotspot."
 
@@ -421,8 +475,8 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
     ]
     if top_event:
         key_facts.insert(1, {
-            "label": "Highest severity",
-            "value": f"{_pct(top_event.severity_score)}% - {_event_label(top_event)}",
+            "label": "Representative event",
+            "value": f"{_pct(top_event.severity_score)}% - {_event_label(top_event, display_by_event)}",
             "citation_ids": citation_ids_by_event.get(top_event.id, [])[:2],
         })
 
@@ -430,17 +484,26 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
         {
             "event_id": event.id,
             "occurred_at": event.occurred_at,
-            "title": _event_label(event),
+            "title": event.title,
+            "display_title": _event_label(event, display_by_event),
             "event_type": event.event_type,
             "location": _location(event),
             "severity_score": event.severity_score,
             "confidence_score": event.confidence_score,
+            "specificity_level": display_by_event[event.id].specificity_level,
+            "specificity_reason": display_by_event[event.id].specificity_reason,
+            "is_generic_classification": display_by_event[event.id].is_generic_classification,
             "citation_ids": citation_ids_by_event.get(event.id, [])[:3],
         }
         for event in events[:6]
     ]
 
-    timeline_groups = _build_timeline_groups(events=events, now=now, citation_ids_by_event=citation_ids_by_event)
+    timeline_groups = _build_timeline_groups(
+        events=events,
+        now=now,
+        citation_ids_by_event=citation_ids_by_event,
+        display_by_event=display_by_event,
+    )
     what_happened = {
         "summary": (
             f"{len(events)} confirmed active events across {', '.join(_top_locations(events, limit=3))}."
@@ -460,10 +523,15 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
         caveats.append("Source corroboration is limited; treat the briefing as an early operational read.")
     if hotspot.confidence_score < 0.6:
         caveats.append("Hotspot confidence is below 60%, so location and event-link assumptions should be reviewed.")
+    if specificity_assessment["low_specificity"]:
+        caveats.insert(0, specificity_assessment["summary"])
 
     if top_event:
         hours = _hours_ago(top_event.occurred_at, now)
-        why += f" The highest-severity member is {_event_label(top_event)}, reported about {hours} hours ago."
+        if display_by_event[top_event.id].is_generic_classification:
+            why += f" The most explainable representative record is still a classification: {_event_label(top_event, display_by_event)}, reported about {hours} hours ago."
+        else:
+            why += f" The most explainable representative event is {_event_label(top_event, display_by_event)}, reported about {hours} hours ago."
 
     referenced_ids = _collect_referenced_ids(key_facts, timeline, why_now, what_happened)
     capped_citations = _cap_citations(citations, referenced_ids)
@@ -498,6 +566,7 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
             ],
         },
         "source_assessment": source_assessment,
+        "specificity_assessment": specificity_assessment,
         "caveats": caveats + source_notes,
     }
 
@@ -513,5 +582,6 @@ def build_hotspot_briefing(db: Session, hotspot: Hotspot) -> dict:
         "why_now": why_now,
         "what_happened": what_happened,
         "source_assessment": source_assessment,
+        "specificity_assessment": specificity_assessment,
         "model_packet": model_packet,
     }

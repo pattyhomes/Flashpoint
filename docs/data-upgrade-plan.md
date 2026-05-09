@@ -161,6 +161,12 @@ The next deterministic slice is also implemented: hotspot briefings now include
 assessment, capped citations, and a model-ready packet. This deepens the
 intelligence layer while staying SQLite-first and model-free at runtime.
 
+A specificity gate now guards event explanations. Generic GDELT classifications
+and broad state-level records are labeled as classifications/source gaps instead
+of concrete incidents, while real article/source titles are preferred when they
+are specific. This display contract is shared across briefing, event detail,
+member events, and the incident feed; scoring remains unchanged.
+
 ## Recommended Next Sprint
 
 After Stage 1.5 operational rollout:

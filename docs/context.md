@@ -47,6 +47,11 @@ model-ready packet for future Mac Mini/Ollama summarization. Confirmed events
 remain the only basis for briefing claims; weak/context observations remain
 context-only.
 
+Event display now uses a shared specificity contract across briefing, event
+detail, member events, and the incident feed. Generic GDELT classifications must
+not be presented as concrete incident explanations; high-volume broad-location
+clusters should show explicit low-specificity/source-gap language.
+
 ## Current Branch/Deployment
 
 Recent work is merged to `main`.

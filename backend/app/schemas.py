@@ -58,6 +58,10 @@ class EventOut(BaseModel):
     trend_state: str | None
     is_active: bool
     location_precision: str | None
+    display_title: str
+    specificity_level: str
+    specificity_reason: str
+    is_generic_classification: bool
 
     model_config = {"from_attributes": True}
 
@@ -187,10 +191,14 @@ class HotspotBriefingTimelineItem(BaseModel):
     event_id: int
     occurred_at: datetime
     title: str
+    display_title: str
     event_type: str
     location: str
     severity_score: float
     confidence_score: float
+    specificity_level: str
+    specificity_reason: str
+    is_generic_classification: bool
     citation_ids: list[int] = Field(default_factory=list)
 
 
@@ -232,10 +240,14 @@ class HotspotBriefingEventRef(BaseModel):
     event_id: int
     occurred_at: datetime
     title: str
+    display_title: str
     event_type: str
     location: str
     severity_score: float
     confidence_score: float
+    specificity_level: str
+    specificity_reason: str
+    is_generic_classification: bool
     citation_ids: list[int] = Field(default_factory=list)
 
 
@@ -269,6 +281,15 @@ class HotspotBriefingSourceAssessment(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class HotspotSpecificityAssessment(BaseModel):
+    summary: str
+    incident_specific_count: int
+    classified_count: int
+    low_location_count: int
+    source_gap_count: int
+    low_specificity: bool
+
+
 class HotspotBriefingOut(BaseModel):
     hotspot_id: int
     generated_at: datetime
@@ -281,6 +302,7 @@ class HotspotBriefingOut(BaseModel):
     why_now: HotspotBriefingWhyNow | None = None
     what_happened: HotspotBriefingWhatHappened | None = None
     source_assessment: HotspotBriefingSourceAssessment | None = None
+    specificity_assessment: HotspotSpecificityAssessment | None = None
     model_packet: dict = Field(default_factory=dict)
 
 

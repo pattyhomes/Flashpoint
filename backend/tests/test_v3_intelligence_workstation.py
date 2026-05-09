@@ -358,8 +358,8 @@ def test_hotspot_briefing_returns_grounded_facts_timeline_and_citations():
         assert body["hotspot_id"] == 1
         assert "Philadelphia Metro" in body["headline"]
         assert "confirmed event density" in body["why_it_matters"]
-        assert any(fact["label"] == "Highest severity" for fact in body["key_facts"])
-        assert body["timeline"][0]["title"] == "Transit protest disrupts downtown service"
+        assert any(fact["label"] == "Representative event" for fact in body["key_facts"])
+        assert body["timeline"][0]["display_title"] == "Transit protest disrupts downtown service"
         assert body["timeline"][0]["citation_ids"]
         assert any(citation["source_name"] == "WHYY" and citation["counted"] for citation in body["citations"])
     finally:
@@ -601,6 +601,156 @@ def test_hotspot_briefing_empty_hotspot_returns_depth_sections_with_caveat():
         assert body["source_assessment"]["counted_source_count"] == 0
         assert "No active confirmed events" in body["what_happened"]["summary"]
         assert any("no active confirmed member events" in caveat.lower() for caveat in body["caveats"])
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_event_api_marks_generic_state_level_gdelt_classification_without_url_inference():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_event(
+        source_id="generic-gdelt",
+        title="Violence — Tennessee",
+        event_type="violence",
+        city="Tennessee",
+        state="TN",
+        source_name="gdelt",
+        source_url="https://example.test/specific-looking-url-slug",
+        location_precision="state",
+    ))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/events/?limit=10")
+        assert response.status_code == 200
+        event = response.json()["items"][0]
+        assert event["display_title"] == "State-level GDELT violence classification - Tennessee"
+        assert event["specificity_level"] == "low_location"
+        assert event["is_generic_classification"] is True
+        assert "specific-looking-url-slug" not in event["display_title"]
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_event_api_prefers_concrete_source_title_over_generic_event_title():
+    engine = _engine()
+    db = _session(engine)
+    event = _event(
+        source_id="generic-with-source-title",
+        title="Violence — Nashville",
+        event_type="violence",
+        city="Nashville",
+        state="TN",
+        source_name="gdelt",
+        location_precision="city",
+    )
+    db.add(event)
+    db.flush()
+    db.add(EventSource(
+        event_id=event.id,
+        source_type="eventregistry",
+        source_record_id="specific-source-title",
+        source_name="Local outlet",
+        source_title="Protesters block downtown street after council vote",
+        source_trust_weight=1.0,
+        location_precision="city",
+    ))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get(f"/api/v1/events/{event.id}")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["display_title"] == "Protesters block downtown street after council vote"
+        assert body["specificity_level"] == "specific"
+        assert body["is_generic_classification"] is False
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_prefers_explainable_representative_over_generic_high_severity():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_hotspot(name="Tennessee region", event_count=2))
+    generic = _event(
+        source_id="generic-high-severity",
+        title="Violence — Tennessee",
+        event_type="violence",
+        city="Tennessee",
+        state="TN",
+        source_name="gdelt",
+        severity_score=1.0,
+        confidence_score=0.5,
+        location_precision="state",
+    )
+    specific = _event(
+        source_id="specific-lower-severity",
+        title="Protesters block downtown street after council vote",
+        event_type="protest",
+        city="Nashville",
+        state="TN",
+        source_name="eventregistry",
+        severity_score=0.72,
+        confidence_score=0.74,
+        location_precision="city",
+    )
+    db.add(generic)
+    db.add(specific)
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        representative = next(fact for fact in body["key_facts"] if fact["label"] == "Representative event")
+        assert "Protesters block downtown street" in representative["value"]
+        first_rep = body["what_happened"]["timeline_groups"][0]["representative_events"][0]
+        assert first_rep["display_title"] == "Protesters block downtown street after council vote"
+        assert first_rep["specificity_level"] == "specific"
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+
+
+def test_hotspot_briefing_flags_tennessee_like_low_specificity_volume():
+    engine = _engine()
+    db = _session(engine)
+    db.add(_hotspot(name="Tennessee region", event_count=8, confidence_score=0.5))
+    for index in range(8):
+        db.add(_event(
+            source_id=f"tn-generic-{index}",
+            title="Violence — Tennessee",
+            event_type="violence",
+            city="Tennessee",
+            state="TN",
+            source_name="gdelt",
+            location_precision="state",
+            occurred_at=utcnow_naive() - timedelta(hours=index + 1),
+            severity_score=0.95,
+        ))
+    db.commit()
+
+    client = _client(engine)
+    try:
+        response = client.get("/api/v1/hotspots/1/briefing")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["specificity_assessment"]["low_specificity"] is True
+        assert body["specificity_assessment"]["incident_specific_count"] == 0
+        assert body["specificity_assessment"]["classified_count"] == 8
+        assert body["specificity_assessment"]["low_location_count"] == 8
+        assert body["caveats"][0].startswith("High volume, but low incident specificity")
+        assert "High volume, but low incident specificity" in body["why_it_matters"]
     finally:
         app.dependency_overrides.clear()
         db.close()

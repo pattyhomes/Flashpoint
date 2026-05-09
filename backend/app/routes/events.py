@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Event, EventSource
-from app.schemas import EventDetailOut, EventOut, EventPage
+from app.schemas import EventDetailOut, EventPage
+from app.services.event_display import serialize_event
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -17,8 +18,14 @@ def list_events(
     base = db.query(Event).filter(Event.is_active == True)
     total = base.count()
     items = base.order_by(Event.occurred_at.desc()).offset(offset).limit(limit).all()
+    event_ids = [event.id for event in items]
+    sources_by_event: dict[int, list[EventSource]] = {event_id: [] for event_id in event_ids}
+    if event_ids:
+        sources = db.query(EventSource).filter(EventSource.event_id.in_(event_ids)).all()
+        for source in sources:
+            sources_by_event.setdefault(source.event_id, []).append(source)
     return {
-        "items": items,
+        "items": [serialize_event(event, sources_by_event.get(event.id, [])) for event in items],
         "total": total,
         "limit": limit,
         "offset": offset,
@@ -37,5 +44,5 @@ def get_event(event_id: int, db: Session = Depends(get_db)):
         .order_by(EventSource.source_published_at.desc())
         .all()
     )
-    base = EventOut.model_validate(event).model_dump()
+    base = serialize_event(event, sources)
     return {**base, "sources": sources}

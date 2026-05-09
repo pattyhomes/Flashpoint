@@ -5,6 +5,13 @@ function pct(value) {
   return Math.round((value || 0) * 100)
 }
 
+function specificityLabel(value) {
+  if (value === 'low_location') return 'LOW LOC'
+  if (value === 'source_gap') return 'SRC GAP'
+  if (value === 'classified') return 'CLASS'
+  return value || 'SPEC'
+}
+
 function severityColor(score) {
   if (score >= 0.8) return '#ff3a2e'
   if (score >= 0.6) return '#ff7a18'
@@ -160,7 +167,8 @@ function WhatHappenedSection({ whatHappened, citationsById }) {
             {(group.representative_events || []).slice(0, 2).map(event => (
               <div key={event.event_id} className="briefing-group-event">
                 <span>{relativeTime(event.occurred_at)}</span>
-                <b>{event.title}</b>
+                <b>{event.display_title || event.title}</b>
+                {event.is_generic_classification && <em>{specificityLabel(event.specificity_level)}</em>}
                 <CitationRefs ids={event.citation_ids} citationsById={citationsById} />
               </div>
             ))}
@@ -217,6 +225,12 @@ function HotspotBriefing({ briefing, loading }) {
         <b>{briefing.headline}</b>
         <p>{briefing.why_it_matters}</p>
       </div>
+      {briefing.specificity_assessment?.low_specificity && (
+        <div className="briefing-specificity-warning">
+          <b>LOW SPECIFICITY</b>
+          <span>{briefing.specificity_assessment.summary}</span>
+        </div>
+      )}
       <WhyNowSection whyNow={briefing.why_now} citationsById={citationsById} />
       <WhatHappenedSection whatHappened={briefing.what_happened} citationsById={citationsById} />
       <SourceReadSection sourceAssessment={briefing.source_assessment} />
@@ -271,16 +285,25 @@ function SignalContext({ signals, lat, lon }) {
 function EventDetail({ event, detail, detailLoading, signals }) {
   const enriched = detail || event
   const location = [event.city, event.state].filter(Boolean).join(', ') || event.country
+  const displayTitle = enriched.display_title || event.display_title || event.title
+  const specificityReason = enriched.specificity_reason || event.specificity_reason
+  const specificityLevel = enriched.specificity_level || event.specificity_level
   return (
     <div className="detail-body">
       <div className="detail-kicker">EVENT · {event.source_name}</div>
-      <h2>{event.source_name === 'gdelt' ? `${event.event_type} signal — ${location}` : event.title}</h2>
+      <h2>{displayTitle}</h2>
       <div className="detail-meta-grid">
         <span><b>ID</b>{event.id}</span>
         <span><b>TYPE</b>{event.event_type}</span>
         <span><b>WHERE</b>{location}</span>
         <span><b>WHEN</b>{formatDate(event.occurred_at)}</span>
       </div>
+      {specificityReason && (
+        <div className={`specificity-note specificity-note--${specificityLevel || 'specific'}`}>
+          <b>{specificityLabel(specificityLevel)}</b>
+          <span>{specificityReason}</span>
+        </div>
+      )}
       <ScoreGrid scores={[
         { label: 'Severity', value: event.severity_score },
         { label: 'Confidence', value: event.confidence_score },
@@ -333,8 +356,8 @@ function HotspotDetail({ hotspot, memberEvents = [], loading, briefing, briefing
         ) : memberEvents.slice(0, 10).map(event => (
           <div key={event.id} className="member-event-row">
             <i style={{ background: severityColor(event.severity_score) }} />
-            <span>{event.event_type}</span>
-            <b>{event.source_name === 'gdelt' ? `${event.event_type} signal — ${event.city || event.country}` : event.title}</b>
+            <span>{event.is_generic_classification ? 'CLASS' : specificityLabel(event.specificity_level) || event.event_type}</span>
+            <b>{event.display_title || event.title}</b>
             <em>{relativeTime(event.occurred_at)}</em>
           </div>
         ))}

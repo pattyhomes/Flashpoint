@@ -8,14 +8,17 @@ function severityColor(score) {
   return '#22c55e'
 }
 
-function gdeltDisplayTitle(event) {
-  const loc = [event.city, event.state].filter(Boolean).join(', ') || event.country
-  return `${event.event_type} signal — ${loc}`
+function specificityLabel(value) {
+  if (value === 'low_location') return 'LOW LOC'
+  if (value === 'source_gap') return 'SRC GAP'
+  if (value === 'classified') return 'CLASS'
+  return value || 'SPEC'
 }
 
 function EventRow({ event, isSelected, onSelect }) {
   const location = [event.city, event.state].filter(Boolean).join(', ')
-  const isGdelt = event.source_name === 'gdelt'
+  const displayTitle = event.display_title || event.title
+  const specificity = event.is_generic_classification ? 'CLASS' : specificityLabel(event.specificity_level)
   return (
     <button
       data-id={event.id}
@@ -26,8 +29,8 @@ function EventRow({ event, isSelected, onSelect }) {
         className="event-row__dot"
         style={{ backgroundColor: severityColor(event.severity_score) }}
       />
-      <span className="event-row__type">{isGdelt ? 'GDELT' : event.event_type}</span>
-      <span className="event-row__title">{isGdelt ? gdeltDisplayTitle(event) : event.title}</span>
+      <span className="event-row__type">{specificity || event.event_type}</span>
+      <span className="event-row__title">{displayTitle}</span>
       <span className="event-row__location">{location}</span>
       <span className="event-row__time">{relativeTime(event.occurred_at)}</span>
     </button>
